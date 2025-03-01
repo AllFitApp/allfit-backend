@@ -10,12 +10,17 @@ const jwt = require('jsonwebtoken');
 const app = express()
 const port = 3002
 
-app.use(cors({
-  origin: process.env.FRONT_END_URL,  // Alvo do frontend
-  methods: ['GET', 'POST', 'PUT', 'DELETE'],  // Métodos permitidos
-  allowedHeaders: ['Content-Type', 'Authorization'],  // Cabeçalhos permitidos
-  credentials: true  // Permitir o envio de cookies ou autenticação via token
-}));
+
+const corsOptions = {
+  origin: 'http://localhost:5173',
+  methods: ['GET', 'POST', 'PUT', 'DELETE'], 
+  allowedHeaders: ['Content-Type', 'Authorization'],
+};
+
+app.options('*', cors(corsOptions));
+
+
+
 
 app.get('/', (req, res) => {
   res.status(200).json({ message: 'Hello World'})

@@ -3,12 +3,8 @@ import { hash } from 'bcrypt';
 import { sign } from 'jsonwebtoken';
 import { compare } from 'bcrypt';
 import { PrismaClientAdapter } from '../../../../adapters/PrismaClientAdapter';
-import { PrismaClient } from "@prisma/client";
 
 const prismaAdapter = new PrismaClientAdapter();
-
-const prisma = new PrismaClient();
-
 const tokenSecret = process.env.SECRET;
 
 type User = {
@@ -20,8 +16,11 @@ type User = {
 const singUp = async (req: Request, res: Response): Promise<any> => {
   try {
     const { email, password, name, username, number, role } = req.body;
-    const userExists = await prisma.user.findUnique({ where: { email } });
+    console.log('BODY', req.body);
+    const userExists = await prismaAdapter.findOne('User', { where: { email } });
     
+    console.log('USER EXISTS', userExists);
+
     if (userExists) {
       return res.status(409).json({ message: 'User already exists' });
     }
@@ -44,12 +43,21 @@ const singUp = async (req: Request, res: Response): Promise<any> => {
   }
 }
 
+// // const singUp = async (req: Request, res: Response): Promise<any> => {
+// //   try {
+// //     const user = await prisma.create('User', req.body );
+// //     res.status(200).json({ user });
+// //   } catch (err) {
+// //     res.status(500).json({ message: err });
+// //   }
+// }
+
 const login = async (req: Request, res: Response): Promise<any> => {
   console.log('BODY', req.body);
   try {
     const { email, password } = req.body;
 
-    const user = await prisma.user.findUnique({ where: { email } });
+    const user = await prismaAdapter.findOne('User', { where: { email } }) as any;
 
     if (!user) {
       return res.status(404).json({ message: 'User not found' });
