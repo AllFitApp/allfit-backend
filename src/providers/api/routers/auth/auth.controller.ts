@@ -1,9 +1,10 @@
-import { NextFunction, Request, Response } from 'express';
+import { Request, Response } from 'express';
 import { hash } from 'bcrypt';	
 import { sign } from 'jsonwebtoken';
 import { compare } from 'bcrypt';
 import { PrismaClientAdapter } from '../../../../adapters/PrismaClientAdapter';
 import { PrismaClient } from "@prisma/client";
+import UserRepository from '../../../../services/UserRepository';
 
 const prismaAdapter = new PrismaClientAdapter();
 
@@ -21,9 +22,8 @@ const singUp = async (req: Request, res: Response): Promise<any> => {
   try {
     const { email, password, name, username, number, role } = req.body;
     const userExists = await prisma.user.findUnique({ where: { email } });
-    
     if (userExists) {
-      return res.status(409).json({ message: 'User already exists' });
+      return res.status(401).json({ message: 'User already exists' });
     }
     
     const hash_password = await hash(password, 8);
