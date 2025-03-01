@@ -1,8 +1,11 @@
 import { Router } from 'express';
 import { authController } from './auth.controller';
-import { signInSchema } from './schema';
+import { signUpSchema } from './schema';
+import { parseJsonBody } from '../../middleware/auth.middleware';
+
 const router = Router();
 
-router.post('/signin', authController.signIn, signInSchema);
-
+router.use(parseJsonBody); // Middleware para analisar o corpo da requisição
+router.post('/signUp', signUpSchema, authController.singUp),
+router.post('/login', authController.login);
 export default router;

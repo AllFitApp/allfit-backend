@@ -10,18 +10,30 @@ var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, P, ge
 };
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.authController = void 0;
+const PrismaClientAdapter_1 = require("../../../../adapters/PrismaClientAdapter");
 const JWT_SECRET = process.env.JWT_SECRET || 'your_jwt_secret';
-const signIn = (req, res, next) => __awaiter(void 0, void 0, void 0, function* () {
+const prisma = new PrismaClientAdapter_1.PrismaClientAdapter();
+const singUp = (req, res, next) => __awaiter(void 0, void 0, void 0, function* () {
     try {
-        const { email, password } = req.body;
-        const result = email + password;
-        res.status(200).json(result);
+        const { name, email, password, userName, number, role } = req.body;
+        const user = yield prisma.create('User', { name, email, password, userName, number, role });
+        res.status(200).json({ user });
         next();
     }
     catch (err) {
         next(err);
     }
 });
+const signIn = (req, res, next) => __awaiter(void 0, void 0, void 0, function* () {
+    // try {
+    //     const { email, password } = req.body;
+    //     res.status(200).json(result);
+    //     next();
+    // } catch (err) {
+    //   next(err);
+    // }
+});
 exports.authController = {
-    signIn
+    signIn,
+    singUp
 };

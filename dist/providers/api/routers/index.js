@@ -7,3 +7,4 @@ const express_1 = __importDefault(require("express"));
 const router_1 = __importDefault(require("./auth/router"));
 const router = express_1.default.Router();
 router.use('/auth', router_1.default);
+exports.default = router;

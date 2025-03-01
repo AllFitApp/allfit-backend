@@ -8,9 +8,13 @@ const emailRegex = new RegExp(
 
 const usernameEmailSchema = Joi.string().required().regex(emailRegex);
 
-export const joiSignInSchema = Joi.object().keys({
+export const joiSignUpSchema = Joi.object().keys({
     username: Joi.alternatives().try(usernameEmailSchema),
-    password: Joi.string().required().regex(passwordRegex)
+    password: Joi.string().required().regex(passwordRegex),
+    name: Joi.string().required(),
+    role: Joi.string().required(),
+    number: Joi.string().required(),
+    userName: Joi.string().required(),
 });
 
-export const signInSchema = celebrate({ [Segments.BODY]: joiSignInSchema });
+export const signUpSchema = celebrate({ [Segments.BODY]: joiSignUpSchema });
