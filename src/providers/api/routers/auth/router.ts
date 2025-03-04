@@ -1,11 +1,11 @@
 import { Router } from 'express';
-import { authController } from './auth.controller';
+import AuthController  from '../../../../infra/controller/AuthController';
 import { signUpSchema } from './schema';
 import { parseJsonBody } from '../../middleware/auth.middleware';
 
 const router = Router();
 
 router.use(parseJsonBody); // Middleware para analisar o corpo da requisição
-router.post('/signUp', authController.singUp),
-router.post('/login', authController.login);
+router.post('/signUp', signUpSchema, AuthController.signUp),
+router.post('/login', AuthController.login);
 export default router;

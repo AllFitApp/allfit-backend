@@ -2,11 +2,6 @@ import express from 'express'
 import router from './providers/api/routes'
 import cors from 'cors'
 
-import { PrismaClient } from '@prisma/client'
-
-const bcrypt = require('bcrypt'); 
-const jwt = require('jsonwebtoken');
-
 const app = express()
 const port = 3002
 
