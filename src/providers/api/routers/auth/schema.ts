@@ -9,12 +9,12 @@ const emailRegex = new RegExp(
 const usernameEmailSchema = Joi.string().required().regex(emailRegex);
 
 export const joiSignUpSchema = Joi.object().keys({
-    username: Joi.alternatives().try(usernameEmailSchema),
-    password: Joi.string().required().regex(passwordRegex),
-    name: Joi.string().required(),
-    role: Joi.string().required(),
-    number: Joi.string().required(),
-    userName: Joi.string().required(),
+    "username": "vitor",
+    "email": "vitor@teste.com",
+    "password": "Vitor@123",
+    "name": "Vitor Teste",
+    "role": "ADMIN",
+    "number": "4999999999"
 });
 
 export const signUpSchema = celebrate({ [Segments.BODY]: joiSignUpSchema });

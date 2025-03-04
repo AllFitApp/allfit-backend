@@ -1,6 +1,6 @@
-import User from "../domain/entity/User";
+import User from "../../domain/entity/User";
 import { User as userPrisma } from "@prisma/client";
-import { PrismaClientAdapter } from "../adapters/PrismaClientAdapter";
+import { PrismaClientAdapter } from "../../adapters/PrismaClientAdapter";
 
 export default class UserRepository {
     private prismaClient: PrismaClientAdapter;
@@ -27,6 +27,14 @@ export default class UserRepository {
     }
 
     async save(user: User) {
-        return await this.prismaClient.create(this.model, user);
+        return await this.prismaClient.create(this.model, {
+            id: user.id,
+            name: user.name,
+            username: user.username,
+            password: user.password,
+            number: user.number,
+            email: user.email,
+            role: user.role,
+        });
     }
 }
