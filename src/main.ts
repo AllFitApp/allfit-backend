@@ -7,15 +7,13 @@ const port = 3002
 
 
 const corsOptions = {
-  origin: 'http://localhost:5173',
-  methods: ['GET', 'POST', 'PUT', 'DELETE'], 
+  origin: '*', // Permite múltiplas origens
+  methods: ['GET', 'POST', 'PUT', 'DELETE'],
   allowedHeaders: ['Content-Type', 'Authorization'],
 };
 
-app.options('*', cors(corsOptions));
-
-
-
+app.use(cors(corsOptions));
+app.use(express.json());
 
 app.get('/', (req, res) => {
   res.status(200).json({ message: 'Hello World'})
