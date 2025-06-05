@@ -48,7 +48,7 @@ model Appointment {
   workoutType  String
   location     String
   time         String   // HH:mm - pode ser validado na camada de aplicação
-  date         DateTime
+  date         DateTime @db.Timestamptz(3)
   duration     Int      // em minutos
   notes        String
 

@@ -89,6 +89,7 @@ export default class AppointmentController {
 
 			res.status(201).json(appointment);
 		} catch (err) {
+			console.log('Erro ao criar agendamento', err);
 			res.status(500).json({ message: 'Erro ao criar agendamento', err });
 		}
 	}
