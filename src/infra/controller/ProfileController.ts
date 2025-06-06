@@ -1,20 +1,22 @@
 import { PrismaClient } from '@prisma/client';
 import { Request, Response } from 'express';
+import { ProfileRepository } from '../repository/ProfileRepository';
 
 const prisma = new PrismaClient();
 
 export default class ProfileController {
-	static async getUserById(req: Request, res: Response): Promise<void> {
+	private static profileRepository = new ProfileRepository();
+
+	static async getUserByUsername(req: Request, res: Response): Promise<void> {
 		try {
-			const { id } = req.params;
-			console.log('GET USER BY ID', id);
+			const { username } = req.params;
 
 			// Verifica se o perfil existe
-			const profile = await prisma.profile.findUnique({ where: { userId: id } });
+			const profile = await prisma.profile.findUnique({ where: { username: username } });
 
 			if (!profile) {
 				// Se não houver perfil, buscar informações básicas do usuário
-				const user = await prisma.user.findUnique({ where: { id } });
+				const user = await prisma.user.findUnique({ where: { username } });
 
 				if (!user) {
 					res.status(404).json({ message: 'User not found' });
@@ -22,9 +24,10 @@ export default class ProfileController {
 				}
 
 				res.status(200).json({
+					username: user.username,
 					firstAccess: true,
 					name: user.name,
-					alunos: 0,
+					alunos: user,
 					description: '',
 					niche: '',
 					followers: 0,
@@ -34,7 +37,7 @@ export default class ProfileController {
 				return;
 			}
 
-			res.status(200).json({ profile });
+			res.status(200).json(profile);
 		} catch (err) {
 			res.status(500).json({ message: 'Error fetching profile', err });
 		}
@@ -46,12 +49,14 @@ export default class ProfileController {
 			const { id } = req.params;
 			const profileData = req.body;
 
-			const profile = await prisma.profile.create({
-				data: {
-					userId: id,
-					...profileData,
-				},
-			});
+			const profile = await this.profileRepository.createProfileFromUser(id, profileData);
+
+			// const profile = await prisma.profile.create({
+			// 	data: {
+			// 		username: username,
+			// 		...profileData,
+			// 	},
+			// });
 
 			res.status(201).json({ profile });
 		} catch (err) {
@@ -62,13 +67,13 @@ export default class ProfileController {
 	// Novo método para atualizar o perfil do usuário
 	static async updateProfile(req: Request, res: Response): Promise<void> {
 		try {
-			const { id } = req.params;
+			const { username } = req.params;
 			const updateData = req.body;
 
 			const profile = await prisma.profile.upsert({
-				where: { userId: id },
+				where: { username: username },
 				update: updateData,
-				create: { userId: id, ...updateData },
+				create: { username: username, ...updateData },
 			});
 
 			res.status(200).json({ profile });

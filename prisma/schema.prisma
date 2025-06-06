@@ -24,7 +24,7 @@ model User {
 
 model Profile {
   id          String   @id @default(uuid())
-  userId      String   @unique
+	username		String   @unique
   address     String
   phone       String
   alunos      Int
@@ -37,7 +37,7 @@ model Profile {
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
 
-  user        User     @relation(fields: [userId], references: [id])
+  user				User     @relation(fields: [username], references: [username])
 
   @@map("user_infos")
 }
