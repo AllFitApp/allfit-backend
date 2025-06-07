@@ -18,6 +18,7 @@ model User {
   createdAt   DateTime @default(now()) @map("created_at")
   updatedAt   DateTime @updatedAt @map("updated_at")
   profile     Profile?
+  likes				PostLike[]
 
   @@map("users")
 }
@@ -28,6 +29,7 @@ model Profile {
   address     String
   phone       String
   alunos      Int
+	posts				Post[]
   name        String
   description String
   niche       String
@@ -53,6 +55,42 @@ model Appointment {
   notes        String
 
   @@map("appointments")
+}
+
+model Post {
+  id         String     @id @default(uuid())
+  profileId  String     @map("profile_id")
+  caption    String?    @db.Text
+  mediaUrl   String     @map("media_url")
+  mediaType  MediaType  @map("media_type")
+  createdAt  DateTime   @default(now()) @map("created_at")
+  updatedAt  DateTime   @updatedAt @map("updated_at")
+
+  profile    Profile    @relation(fields: [profileId], references: [id], onDelete: Cascade)
+  likes      PostLike[]
+
+  @@map("posts")
+  @@index([profileId, createdAt])
+}
+
+model PostLike {
+  id        String   @id @default(uuid())
+  userId    String   @map("user_id")
+  postId    String   @map("post_id")
+  createdAt DateTime @default(now()) @map("created_at")
+
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  post      Post     @relation(fields: [postId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, postId]) // cada user pode curtir 1x
+  @@map("post_likes")
+  @@index([postId])
+  @@index([userId])
+}
+
+enum MediaType {
+  IMAGE
+  VIDEO
 }
 
 enum Role {

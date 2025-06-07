@@ -48,6 +48,12 @@ export default class AuthController {
 				res.status(404).json({ message: 'User not found' });
 				return;
 			}
+			const profile = await prisma.profile.findUnique({ where: { username: user.username } });
+
+			if (!profile) {
+				res.status(404).json({ message: 'Profile not found' });
+				return;
+			}
 
 			const isValidPassword = await compare(password, user.password);
 
@@ -56,7 +62,7 @@ export default class AuthController {
 				return; // Agora interrompe a execução corretamente
 			}
 
-			const token = sign({ id: user.id }, tokenSecret, {
+			const token = sign({ id: user.id, profileId: profile.id }, tokenSecret, {
 				expiresIn: '7d',
 			});
 
