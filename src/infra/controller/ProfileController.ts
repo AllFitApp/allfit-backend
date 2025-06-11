@@ -45,7 +45,6 @@ export default class ProfileController {
 
 	static async createProfile(req: Request, res: Response): Promise<void> {
 		try {
-			console.log('CREATE PROFILE', req.body);
 			const { id } = req.params;
 			const profileData = req.body;
 

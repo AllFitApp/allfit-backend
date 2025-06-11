@@ -26,11 +26,9 @@ export default class AuthController {
 			const hashedPassword = await hash(password, 8);
 
 			const createdUser = new User(name, username, hashedPassword, number, email, role);
-			console.log('usuário criando');
 			const user = await AuthController.userRepository.save(createdUser);
-			console.log('usuário criado');
 			const profile = await AuthController.profileRepository.createProfileFromUser(user.id, {});
-			console.log('perfil criado');
+
 			res.status(200).json({ user });
 		} catch (err) {
 			console.log(err);
