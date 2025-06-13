@@ -66,17 +66,17 @@ export default class ProfileController {
 	// Novo método para atualizar o perfil do usuário
 	static async updateProfile(req: Request, res: Response): Promise<void> {
 		try {
-			const { username } = req.params;
+			const { id } = req.params;
 			const updateData = req.body;
 
-			const profile = await prisma.profile.upsert({
-				where: { username: username },
-				update: updateData,
-				create: { username: username, ...updateData },
+			const profile = await prisma.profile.update({
+				where: { id: id },
+				data: updateData,
 			});
 
 			res.status(200).json({ profile });
 		} catch (err) {
+			console.log(err);
 			res.status(500).json({ message: 'Error updating profile', err });
 		}
 	}
