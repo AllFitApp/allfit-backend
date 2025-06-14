@@ -1,6 +1,8 @@
 // src/controllers/PostController.ts
+import { supabase } from '@/lib/supabase';
 import { PrismaClient } from '@prisma/client';
 import { Request, Response } from 'express';
+import path from 'path';
 
 const prisma = new PrismaClient();
 
@@ -8,12 +10,40 @@ export default class PostController {
 	static async createPost(req: Request, res: Response): Promise<void> {
 		try {
 			const { profileId, caption, mediaType } = req.body;
-			let mediaUrl = '';
-
-			// Se o multer adicionou arquivo, define a URL local
-			if (req.file) {
-				mediaUrl = `/uploads/${req.file.filename}`;
+			console.log('req.file: ', req.file);
+			if (!req.file) {
+				console.error('Nenhuma imagem enviada');
+				res.status(400).json({ message: 'Nenhuma imagem enviada' });
+				return;
 			}
+
+			const fileExt = path.extname(req.file.originalname);
+			const fileName = `post-${Date.now()}${fileExt}`;
+			const filePath = fileName;
+
+			const { data: uploadData, error: uploadError } = await supabase.storage
+				.from('post-images')
+				.upload(filePath, req.file.buffer, {
+					contentType: req.file.mimetype,
+					upsert: false,
+				});
+
+			if (uploadError) {
+				console.error('Erro no upload para Supabase:', uploadError);
+				res.status(500).json({ message: 'Erro ao enviar imagem' });
+				return;
+			}
+
+			const { data: publicData } = supabase.storage.from('post-images').getPublicUrl(uploadData.path);
+
+			if (!publicData?.publicUrl) {
+				console.error('URL pública não retornada');
+				res.status(500).json({ message: 'Não foi possível obter URL da imagem' });
+				return;
+			}
+
+			const mediaUrl = publicData.publicUrl;
+			console.log('URL da imagem enviada:', mediaUrl);
 
 			const post = await prisma.post.create({
 				data: {
@@ -25,9 +55,13 @@ export default class PostController {
 			});
 
 			res.status(201).json(post);
+			return;
 		} catch (err) {
-			console.log(err);
-			res.status(500).json({ message: 'Error creating post', err });
+			console.error(err);
+			if (!res.headersSent) {
+				res.status(500).json({ message: 'Error creating post', err });
+			}
+			return;
 		}
 	}
 
