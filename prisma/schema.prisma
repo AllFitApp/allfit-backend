@@ -42,6 +42,19 @@ model Profile {
   @@map("user_infos")
 }
 
+model Appointment {
+  id           Int      @id @default(autoincrement())
+  studentName  String
+  workoutType  String
+  location     String
+  time         String   // HH:mm - pode ser validado na camada de aplicação
+  date         DateTime @db.Timestamptz(3)
+  duration     Int      // em minutos
+  notes        String
+
+  @@map("appointments")
+}
+
 enum Role {
   USER
   ADMIN

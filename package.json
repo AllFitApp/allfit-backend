@@ -1,41 +1,41 @@
 {
-  "name": "allfit-backend",
-  "version": "1.0.0",
-  "description": "",
-  "main": "main.ts",
-  "scripts": {
-    "build": "tsc",
-    "start": "nodemon --exec ts-node src/main.ts",
-    "test": "jest --runInBand test/"
-  },
-  "author": "allfit",
-  "license": "ISC",
-  "dependencies": {
-    "@types/jest": "^29.5.14",
-    "axios": "^1.8.1",
-    "bcrypt": "^5.1.1",
-    "celebrate": "^15.0.3",
-    "cors": "^2.8.5",
-    "dotenv": "^16.4.7",
-    "express": "^4.21.1",
-    "http-status": "^2.0.0",
-    "jest": "^29.7.0",
-    "jsonwebtoken": "^9.0.2",
-    "mongoose": "^8.9.6",
-    "nodemon": "^3.1.7",
-    "ts-jest": "^29.2.6",
-    "typescript": "^5.6.3",
-    "uuid": "^11.1.0"
-  },
-  "devDependencies": {
-    "@prisma/client": "^6.3.0",
-    "@types/bcrypt": "^5.0.2",
-    "@types/cors": "^2.8.17",
-    "@types/express": "^5.0.0",
-    "@types/jsonwebtoken": "^9.0.7",
-    "i": "^0.3.7",
-    "npm": "^11.1.0",
-    "prisma": "^6.3.0",
-    "ts-node": "^10.9.2"
-  }
+	"name": "allfit-backend",
+	"version": "1.0.0",
+	"description": "",
+	"main": "main.ts",
+	"scripts": {
+		"build": "tsc",
+		"start": "nodemon --exec ts-node -r tsconfig-paths/register src/main.ts",
+		"test": "jest --runInBand test/"
+	},
+	"author": "allfit",
+	"license": "ISC",
+	"dependencies": {
+		"@types/jest": "^29.5.14",
+		"axios": "^1.8.1",
+		"bcrypt": "^5.1.1",
+		"celebrate": "^15.0.3",
+		"cors": "^2.8.5",
+		"dotenv": "^16.4.7",
+		"express": "^4.21.1",
+		"http-status": "^2.0.0",
+		"jest": "^29.7.0",
+		"jsonwebtoken": "^9.0.2",
+		"mongoose": "^8.9.6",
+		"nodemon": "^3.1.7",
+		"ts-jest": "^29.2.6",
+		"typescript": "^5.6.3",
+		"uuid": "^11.1.0"
+	},
+	"devDependencies": {
+		"@prisma/client": "^6.3.0",
+		"@types/bcrypt": "^5.0.2",
+		"@types/cors": "^2.8.17",
+		"@types/express": "^5.0.0",
+		"@types/jsonwebtoken": "^9.0.7",
+		"i": "^0.3.7",
+		"prisma": "^6.3.0",
+		"ts-node": "^10.9.2",
+		"tsconfig-paths": "^4.2.0"
+	}
 }

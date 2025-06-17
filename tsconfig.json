@@ -1,12 +1,15 @@
 {
-    "compilerOptions": {
-      "outDir": "./dist",
-      "module": "Node16",
-      "target": "es6",
-      "strict": true,
-      "esModuleInterop": true,
-      "moduleResolution": "node16"
-
-    },
-    "include": ["src/**/*.ts", "main.ts"]
-  }
+	"compilerOptions": {
+		"baseUrl": ".",
+		"paths": {
+			"@/*": ["src/*"]
+		},
+		"outDir": "./dist",
+		"module": "Node16",
+		"target": "es6",
+		"strict": true,
+		"esModuleInterop": true,
+		"moduleResolution": "node16"
+	},
+	"include": ["src/**/*.ts", "main.ts"]
+}

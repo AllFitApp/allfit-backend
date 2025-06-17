@@ -4,5 +4,6 @@ import ProfileController from '../../../../infra/controller/ProfileController';
 const router = Router();
 
 router.get('/:id', ProfileController.getUserById);
-router.put('/:id', ProfileController.createProfile); 
+router.post('/:id', ProfileController.createProfile);
+router.put('/:id', ProfileController.updateProfile);
 export default router;
