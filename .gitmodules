@@ -1,6 +1,6 @@
 [submodule "allfit-backend"]
 	path = allfit-backend
 	url = https://github.com/tiodospc/allfit-backend.git
-[submodule "src"]
-	path = src
-	url = https://github.com/tiodospc/allfit-backend
+# [submodule "src"]
+# 	path = src
+# 	url = https://github.com/tiodospc/allfit-backend
