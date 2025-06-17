@@ -8,7 +8,7 @@ const port = 3002;
 
 const corsOptions = {
 	origin: '*', // Permite múltiplas origens
-	methods: ['GET', 'POST', 'PUT', 'DELETE'],
+	methods: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH'],
 	allowedHeaders: ['Content-Type', 'Authorization'],
 };
 

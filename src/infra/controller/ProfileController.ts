@@ -1,6 +1,9 @@
+import { supabase } from '@/lib/supabase';
 import { PrismaClient } from '@prisma/client';
 import { Request, Response } from 'express';
 import { ProfileRepository } from '../repository/ProfileRepository';
+
+import path from 'path';
 
 const prisma = new PrismaClient();
 
@@ -36,10 +39,60 @@ export default class ProfileController {
 				});
 				return;
 			}
+			console.log(profile);
 
 			res.status(200).json(profile);
 		} catch (err) {
 			res.status(500).json({ message: 'Error fetching profile', err });
+		}
+	}
+
+	static async updateAvatar(req: Request, res: Response): Promise<void> {
+		try {
+			const { id } = req.params;
+			console.log('req.file: ', req.file);
+			if (!req.file) {
+				res.status(400).json({ message: 'Nenhuma imagem enviada' });
+				return;
+			}
+
+			const fileExt = path.extname(req.file.originalname);
+			const fileName = `avatar-${Date.now()}${fileExt}`;
+			const filePath = fileName;
+
+			const { data: uploadData, error: uploadError } = await supabase.storage
+				.from('profiles-avatars')
+				.upload(filePath, req.file.buffer, {
+					contentType: req.file.mimetype,
+					upsert: true,
+				});
+
+			if (uploadError) {
+				console.error('Erro no upload de avatar:', uploadError);
+				res.status(500).json({ message: 'Erro ao enviar avatar' });
+				return;
+			}
+
+			const { data: publicData } = supabase.storage.from('profiles-avatars').getPublicUrl(uploadData.path);
+
+			if (!publicData?.publicUrl) {
+				res.status(500).json({ message: 'Não foi possível obter URL do avatar' });
+				return;
+			}
+
+			const updatedProfile = await prisma.profile.update({
+				where: { id },
+				data: {
+					avatar: publicData.publicUrl,
+				},
+			});
+
+			res.status(200).json({ profile: updatedProfile });
+		} catch (err) {
+			console.error('Erro ao atualizar avatar:', err);
+			if (!res.headersSent) {
+				res.status(500).json({ message: 'Erro ao atualizar avatar', err });
+			}
 		}
 	}
 
