@@ -76,6 +76,7 @@ export default class AppointmentController {
 				date,
 				duration, // em minutos
 				notes,
+				trainerId,
 			} = req.body;
 
 			if (!studentName || !workoutType || !time || !date) {
@@ -84,7 +85,7 @@ export default class AppointmentController {
 				return;
 			}
 			const appointment = await prisma.appointment.create({
-				data: { studentName, workoutType, location, time, date, duration, notes },
+				data: { trainerId, studentName, workoutType, location, time, date, duration, notes },
 			});
 
 			res.status(201).json(appointment);
