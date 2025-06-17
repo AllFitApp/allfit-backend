@@ -37,7 +37,7 @@ export default class AppointmentController {
 
 	static async getByMonth(req: Request, res: Response): Promise<void> {
 		try {
-			const { year, month } = req.params;
+			const { trainerId, year, month } = req.params;
 
 			const parsedYear = parseInt(year);
 			const parsedMonth = parseInt(month);
@@ -52,6 +52,7 @@ export default class AppointmentController {
 
 			const appointments = await prisma.appointment.findMany({
 				where: {
+					trainerId: trainerId,
 					date: {
 						gte: startDate,
 						lte: endDate,
