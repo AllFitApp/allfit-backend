@@ -1,20 +1,25 @@
+import { supabase } from '@/lib/supabase';
 import { PrismaClient } from '@prisma/client';
 import { Request, Response } from 'express';
+import { ProfileRepository } from '../repository/ProfileRepository';
+
+import path from 'path';
 
 const prisma = new PrismaClient();
 
 export default class ProfileController {
-	static async getUserById(req: Request, res: Response): Promise<void> {
+	private static profileRepository = new ProfileRepository();
+
+	static async getUserByUsername(req: Request, res: Response): Promise<void> {
 		try {
-			const { id } = req.params;
-			console.log('GET USER BY ID', id);
+			const { username } = req.params;
 
 			// Verifica se o perfil existe
-			const profile = await prisma.profile.findUnique({ where: { userId: id } });
+			const profile = await prisma.profile.findUnique({ where: { username: username } });
 
 			if (!profile) {
 				// Se não houver perfil, buscar informações básicas do usuário
-				const user = await prisma.user.findUnique({ where: { id } });
+				const user = await prisma.user.findUnique({ where: { username } });
 
 				if (!user) {
 					res.status(404).json({ message: 'User not found' });
@@ -22,9 +27,10 @@ export default class ProfileController {
 				}
 
 				res.status(200).json({
+					username: user.username,
 					firstAccess: true,
 					name: user.name,
-					alunos: 0,
+					alunos: user,
 					description: '',
 					niche: '',
 					followers: 0,
@@ -33,25 +39,76 @@ export default class ProfileController {
 				});
 				return;
 			}
+			console.log(profile);
 
-			res.status(200).json({ profile });
+			res.status(200).json(profile);
 		} catch (err) {
 			res.status(500).json({ message: 'Error fetching profile', err });
 		}
 	}
 
+	static async updateAvatar(req: Request, res: Response): Promise<void> {
+		try {
+			const { id } = req.params;
+			console.log('req.file: ', req.file);
+			if (!req.file) {
+				res.status(400).json({ message: 'Nenhuma imagem enviada' });
+				return;
+			}
+
+			const fileExt = path.extname(req.file.originalname);
+			const fileName = `avatar-${Date.now()}${fileExt}`;
+			const filePath = fileName;
+
+			const { data: uploadData, error: uploadError } = await supabase.storage
+				.from('profiles-avatars')
+				.upload(filePath, req.file.buffer, {
+					contentType: req.file.mimetype,
+					upsert: true,
+				});
+
+			if (uploadError) {
+				console.error('Erro no upload de avatar:', uploadError);
+				res.status(500).json({ message: 'Erro ao enviar avatar' });
+				return;
+			}
+
+			const { data: publicData } = supabase.storage.from('profiles-avatars').getPublicUrl(uploadData.path);
+
+			if (!publicData?.publicUrl) {
+				res.status(500).json({ message: 'Não foi possível obter URL do avatar' });
+				return;
+			}
+
+			const updatedProfile = await prisma.profile.update({
+				where: { id },
+				data: {
+					avatar: publicData.publicUrl,
+				},
+			});
+
+			res.status(200).json({ profile: updatedProfile });
+		} catch (err) {
+			console.error('Erro ao atualizar avatar:', err);
+			if (!res.headersSent) {
+				res.status(500).json({ message: 'Erro ao atualizar avatar', err });
+			}
+		}
+	}
+
 	static async createProfile(req: Request, res: Response): Promise<void> {
 		try {
-			console.log('CREATE PROFILE', req.body);
 			const { id } = req.params;
 			const profileData = req.body;
 
-			const profile = await prisma.profile.create({
-				data: {
-					userId: id,
-					...profileData,
-				},
-			});
+			const profile = await this.profileRepository.createProfileFromUser(id, profileData);
+
+			// const profile = await prisma.profile.create({
+			// 	data: {
+			// 		username: username,
+			// 		...profileData,
+			// 	},
+			// });
 
 			res.status(201).json({ profile });
 		} catch (err) {
@@ -65,14 +122,14 @@ export default class ProfileController {
 			const { id } = req.params;
 			const updateData = req.body;
 
-			const profile = await prisma.profile.upsert({
-				where: { userId: id },
-				update: updateData,
-				create: { userId: id, ...updateData },
+			const profile = await prisma.profile.update({
+				where: { id: id },
+				data: updateData,
 			});
 
 			res.status(200).json({ profile });
 		} catch (err) {
+			console.log(err);
 			res.status(500).json({ message: 'Error updating profile', err });
 		}
 	}

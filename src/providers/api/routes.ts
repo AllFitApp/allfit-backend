@@ -2,6 +2,7 @@ import express from 'express';
 
 import appointmentsRouter from './routers/appointments/router';
 import authRouter from './routers/auth/router';
+import postsRouter from './routers/posts/router';
 import profileRouter from './routers/profile/router';
 
 const router = express.Router();
@@ -9,5 +10,6 @@ const router = express.Router();
 router.use('/auth', authRouter);
 router.use('/profile', profileRouter);
 router.use('/appointments', appointmentsRouter);
+router.use('/posts', postsRouter);
 
 export default router;
