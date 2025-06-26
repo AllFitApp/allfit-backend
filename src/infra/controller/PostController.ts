@@ -10,7 +10,6 @@ export default class PostController {
 	static async createPost(req: Request, res: Response): Promise<void> {
 		try {
 			const { profileId, caption, mediaType } = req.body;
-			console.log('req.file: ', req.file);
 			if (!req.file) {
 				console.error('Nenhuma imagem enviada');
 				res.status(400).json({ message: 'Nenhuma imagem enviada' });
