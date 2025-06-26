@@ -23,5 +23,6 @@ app.get('/', (req, res) => {
 app.use(router);
 
 app.listen(port, () => {
+	console.clear();
 	console.log(`Started ${port}`);
 });
