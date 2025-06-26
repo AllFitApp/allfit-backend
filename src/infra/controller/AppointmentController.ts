@@ -80,7 +80,6 @@ export default class AppointmentController {
 			} = req.body;
 
 			if (!studentName || !workoutType || !time || !date) {
-				console.log('Campos não preenchidos: ', studentName, workoutType, time, date);
 				res.status(400).json({ message: 'Todos os campos obrigatórios devem ser fornecidos' });
 				return;
 			}

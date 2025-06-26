@@ -39,7 +39,6 @@ export default class ProfileController {
 				});
 				return;
 			}
-			console.log(profile);
 
 			res.status(200).json(profile);
 		} catch (err) {
@@ -50,7 +49,6 @@ export default class ProfileController {
 	static async updateAvatar(req: Request, res: Response): Promise<void> {
 		try {
 			const { id } = req.params;
-			console.log('req.file: ', req.file);
 			if (!req.file) {
 				res.status(400).json({ message: 'Nenhuma imagem enviada' });
 				return;
