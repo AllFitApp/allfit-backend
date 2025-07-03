@@ -15,8 +15,10 @@ export default class AuthController {
 
 	static async signUp(req: Request, res: Response): Promise<void> {
 		try {
-			const { email, password, name, username, number, role } = req.body;
-			const userExists = await prisma.user.findUnique({ where: { email } });
+			const { email, password, name, username, number, role, cpf } = req.body;
+			const userExists = await prisma.user.findUnique({
+				where: { email: email.toString().toLowerCase().trim() },
+			});
 
 			if (userExists) {
 				res.status(401).json({ message: 'User already exists' });
@@ -25,7 +27,15 @@ export default class AuthController {
 
 			const hashedPassword = await hash(password, 8);
 
-			const createdUser = new User(name, username, hashedPassword, number, email, role);
+			const createdUser = new User(
+				name.toString().trim(),
+				username.toString().toLowerCase().trim(),
+				hashedPassword,
+				number.toString().trim(),
+				email.toString().toLowerCase().trim(),
+				role,
+				cpf.toString().trim()
+			);
 			const user = await AuthController.userRepository.save(createdUser);
 			const profile = await AuthController.profileRepository.createProfileFromUser(user.id, {});
 
