@@ -7,33 +7,75 @@ const prisma = new PrismaClient();
 
 export default class PaymentController {
 	/**
-	 * Criar plano mensal
+	 * Criar plano mensal (features é um array flexível)
+	 * Por enquanto, apenas planos mensais, pré-pago com cartão de crédito
+	 * Ex:
+	 * [{
+			"id": "aulas_mensais",
+			"name": "Aulas mensais",
+			"description": "8 aulas por mês",
+			"value": "8",
+			"unit": "aulas",
+			"icon": "calendar",
+			"highlighted": true
+      }]
 	 */
-	static async createMonthlyPlan(req: Request, res: Response) {
+	static async createMonthlyModel(req: Request, res: Response) {
 		try {
-			const { userId } = req.params;
-			const { name, description, price, features } = req.body;
+			const { userId, name, description, price, features } = req.body;
 
 			const user = await prisma.user.findUnique({
 				where: { id: userId },
-				select: { role: true, username: true },
+				select: { role: true, username: true, wallet: { select: { pagarmeWalletId: true } } },
 			});
 
-			if (!user || user.role !== 'TRAINER') {
+			if (!user || user.role.toUpperCase() !== 'TRAINER') {
 				res.status(400).json({ message: 'Usuário deve ser um treinador.' });
 				return;
 			}
+			if (!user.wallet?.pagarmeWalletId) {
+				res.status(405).json({ message: 'Você deve ter uma carteira para continuar.' });
+				return;
+			}
+			if (typeof price !== 'number') {
+				res.status(400).json({ message: 'O valor do plano deve ser um número.' });
+				return;
+			}
+			if (price <= 1000) {
+				res.status(400).json({ message: 'O valor do plano deve ser maior que R$ 10,00.' });
+				return;
+			}
 
-			// Converte para centavos se necessário
-			const priceCents = typeof price === 'number' ? Math.floor(price * 100) : price;
+			const payload = {
+				interval: 'month',
+				interval_count: 1,
+				pricing_scheme: {
+					scheme_type: 'unit',
+					price: price,
+				},
+				quantity: 1,
+				name,
+				currency: 'BRL',
+				billing_type: 'prepaid',
+				payment_methods: ['credit_card'],
+				metadata: { recipientId: user.wallet.pagarmeWalletId },
+			};
+			const { data, status, statusText } = await pagarmeApi.post('/plans', payload);
+
+			if (data?.status !== 'active') {
+				console.log('Erro ao criar plano:', statusText);
+				res.status(500).json({ message: 'Erro ao criar plano.' });
+				return;
+			}
 
 			const plan = await prisma.plan.create({
 				data: {
 					trainerId: userId,
 					trainerUsername: user.username,
+					pagarmePlanId: data.id,
 					name,
 					description,
-					price: priceCents,
+					price: price,
 					features,
 					isActive: true,
 				},
@@ -46,7 +88,6 @@ export default class PaymentController {
 					name: plan.name,
 					description: plan.description,
 					price: plan.price,
-					priceFormatted: (plan.price / 100).toFixed(2),
 					features: plan.features,
 					isActive: plan.isActive,
 				},
@@ -68,15 +109,14 @@ export default class PaymentController {
 					trainerId,
 					isActive: true,
 				},
+				omit: {
+					trainerId: true,
+					trainerUsername: true,
+				},
 				orderBy: { createdAt: 'desc' },
 			});
 
-			const formattedPlans = plans.map((plan) => ({
-				...plan,
-				priceFormatted: (plan.price / 100).toFixed(2),
-			}));
-
-			res.json({ plans: formattedPlans });
+			res.json({ plans: plans });
 		} catch (error: any) {
 			console.error('Erro ao buscar planos:', error.response?.data || error.message);
 			res.status(500).json({ message: 'Erro ao buscar planos.' });
@@ -85,7 +125,7 @@ export default class PaymentController {
 	/**
 	 * Criar assinatura mensal
 	 */
-	static async createMonthlySubscription(req: Request, res: Response) {
+	static async payMonthlySubscription(req: Request, res: Response) {
 		try {
 			const { studentId, trainerId, cardId, planId } = req.body;
 
@@ -226,7 +266,7 @@ export default class PaymentController {
 			const { userId } = req.body;
 
 			const subscription = await prisma.subscription.findUnique({
-				where: { id: Number(subscriptionId) },
+				where: { id: subscriptionId },
 			});
 
 			if (!subscription) {
@@ -244,7 +284,7 @@ export default class PaymentController {
 
 			// Atualiza status local
 			await prisma.subscription.update({
-				where: { id: Number(subscriptionId) },
+				where: { id: subscriptionId },
 				data: {
 					status: 'CANCELLED',
 					endDate: new Date(),
@@ -257,12 +297,23 @@ export default class PaymentController {
 			res.status(500).json({ message: 'Erro ao cancelar assinatura.' });
 		}
 	}
+	static async deleteSubscriptionModel(req: Request, res: Response) {
+		try {
+			const { planId } = req.params;
+			await pagarmeApi.delete(`/plans/${planId}`);
+			await prisma.plan.delete({ where: { id: planId } });
+			res.json({ message: 'Assinatura excluida com sucesso.' });
+		} catch (error: any) {
+			console.error('Erro ao excluir assinatura:', error.message);
+			res.status(500).json({ message: 'Erro ao excluir assinatura.' });
+		}
+	}
 
 	// ==== Aulas avulsas ====
 	/**
 	 * Definir aulas avulsas
 	 */
-	static async createSingleWorkout(req: Request, res: Response) {
+	static async createSingleWorkoutModel(req: Request, res: Response) {
 		try {
 			const { userId, name, description, price } = req.body;
 			if (!userId || !name || !description || !price) {
@@ -395,7 +446,7 @@ export default class PaymentController {
 	 * Pagamento de aula avulsa (payOneTimeWorkout)
 	 * Do valor da aula será deduzido a taxa da plataforma
 	 */
-	static async payOneTime(req: Request, res: Response) {
+	static async paySingleWorkout(req: Request, res: Response) {
 		try {
 			const {
 				studentId,

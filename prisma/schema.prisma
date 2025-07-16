@@ -42,6 +42,13 @@ model User {
   subscriptions        Subscription[] @relation("UserSubscriptions")
   trainerSubscriptions Subscription[] @relation("TrainerSubscriptions")
 
+  // Mini Store - Produtos
+  products Product[] @relation("TrainerProducts")
+  
+  // Orders - Pedidos como comprador e vendedor
+  orders        Order[] @relation("CustomerOrders")
+  trainerOrders Order[] @relation("TrainerOrders")
+
   @@map("users")
 }
 
@@ -139,7 +146,7 @@ model Appointment {
 
   trainer User @relation("TrainerAppointments", fields: [trainerId], references: [id])
 
-  planId          Int?
+  planId          String?
   singleWorkoutId Int?
 
   plan          Plan?          @relation(fields: [planId], references: [id])
@@ -214,9 +221,10 @@ model SavedCard {
 }
 
 model Plan {
-  id              Int      @id @default(autoincrement())
+  id              String   @id @default(uuid())
   trainerUsername String   @map("trainer_username")
   trainerId       String   @map("trainer_id")
+	pagarmePlanId		String   @unique @map("pagarme_plan_id")
   name            String
   description     String?
   category        String?
@@ -235,10 +243,10 @@ model Plan {
 }
 
 model Subscription {
-  id                    Int                @id @default(autoincrement())
+  id                    String             @id @default(uuid())
   userId                String             @map("user_id")
   trainerId             String             @map("trainer_id")
-  planId                Int                @map("plan_id")
+  planId                String             @map("plan_id")
   pagarmeSubscriptionId String             @unique @map("pagarme_subscription_id")
   status                SubscriptionStatus @default(ACTIVE)
   planPrice             Int                @map("plan_price") // em centavos
@@ -273,6 +281,96 @@ model SingleWorkout {
 
   @@index([trainerUsername, isActive]) // Mantém o índice no username para performance
   @@map("single_classes")
+}
+
+// === MINI LOJA - PRODUTOS ===
+
+model Product {
+  id          Int           @id @default(autoincrement())
+  trainerId   String        @map("trainer_id")
+  name        String        @db.VarChar(255)
+  description String?       @db.Text
+  price       Int           // em centavos
+  type        ProductType
+  category    String?       @db.VarChar(100)
+  images      String[]      // URLs das imagens
+  
+  // Especificações do produto (tamanhos, cores, etc.)
+  specifications Json?
+  
+  // Controle de estoque opcional (null = infinito)
+  stockQuantity  Int?        @map("stock_quantity")
+  
+  // Status
+  isActive       Boolean     @default(true) @map("is_active")
+  
+  // Timestamps
+  createdAt      DateTime    @default(now()) @map("created_at")
+  updatedAt      DateTime    @updatedAt @map("updated_at")
+
+  // Relations
+  trainer    User        @relation("TrainerProducts", fields: [trainerId], references: [id], onDelete: Cascade)
+  orderItems OrderItem[]
+
+  @@index([trainerId, isActive])
+  @@index([type, category])
+  @@map("products")
+}
+
+model Order {
+  id            String      @id @default(uuid())
+  customerId    String      @map("customer_id")
+  trainerId     String      @map("trainer_id")
+  orderNumber   String      @unique @map("order_number") // Número sequencial amigável
+  
+  // Total
+  totalAmount   Int         @map("total_amount") // em centavos
+  
+  // Status e pagamento
+  status        String
+  paymentMethod String?     @map("payment_method")
+  
+  // Pagamentos
+  pagarmeOrderId String?   @unique @map("pagarme_order_id")
+  
+  // Timestamps
+  createdAt     DateTime   @default(now()) @map("created_at")
+  updatedAt     DateTime   @updatedAt @map("updated_at")
+
+  // Relations
+  customer   User        @relation("CustomerOrders", fields: [customerId], references: [id], onDelete: Cascade)
+  trainer    User        @relation("TrainerOrders", fields: [trainerId], references: [id], onDelete: Cascade)
+  items      OrderItem[]
+
+  @@index([customerId])
+  @@index([trainerId])
+  @@index([status])
+  @@index([createdAt])
+  @@map("orders")
+}
+
+model OrderItem {
+  id         Int    @id @default(autoincrement())
+  orderId    String @map("order_id")
+  productId  Int    @map("product_id")
+  quantity   Int    @default(1)
+  unitPrice  Int    @map("unit_price") // em centavos
+  totalPrice Int    @map("total_price") // em centavos
+  
+  // Especificações do item no momento da compra
+  specifications Json? // tamanho, cor, etc.
+  
+  // Timestamps
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  // Relations
+  order   Order   @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  product Product @relation(fields: [productId], references: [id])
+
+  @@index([orderId])
+  @@index([productId])
+  @@map("order_items")
 }
 
 model Transaction {
@@ -317,6 +415,7 @@ enum TransactionType {
   WITHDRAWAL // saque
   REFUND // estorno
   FEE // taxa da plataforma
+  PRODUCT_SALE // venda de produto
 }
 
 enum SubscriptionStatus {
@@ -324,4 +423,16 @@ enum SubscriptionStatus {
   CANCELLED // cancelada
   EXPIRED // expirada
   SUSPENDED // suspensa
+}
+
+enum ProductType {
+  APPAREL // roupas
+  ACCESSORY // acessórios
+  SUPPLEMENT // suplementos
+  EQUIPMENT // equipamentos
+  DIGITAL // produtos digitais
+  TICKET // ingressos
+  COURSE // cursos
+  EBOOK // e-books
+  OTHER // outros
 }
