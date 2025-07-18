@@ -14,10 +14,12 @@ router.get('/single-workout/:username', PaymentController.getSingleWorkout); // 
 router.delete('/single-workout', PaymentController.deleteSingleWorkout); // Deleta plano de aula avulsa
 
 router.post('/plan', PaymentController.createMonthlyModel); // Cria modelo de assinatura ✅
-router.post('/subscription', PaymentController.payMonthlySubscription); // Assinatura mensalidade
+router.post('/subscription', PaymentController.payMonthlySubscription); // Assinatura mensalidade ✅
 router.get('/plans', PaymentController.getTrainerPlans); // Lista planos criados do treinador ✅
 router.get('/transactions/:userId', PaymentController.getTransactions); // Lista transações ✅
 router.delete('/plan/:planId', PaymentController.deleteSubscriptionModel); // Deleta plano ✅ (necessita de método rollback)
-router.delete('/subscriptions', PaymentController.cancelSubscription); // Cancela assinatura
+
+router.get('/subscriptions/:userId', PaymentController.listSubscriptions); // Lista planos criados do treinador ✅
+router.delete('/subscription/:userId/:subscriptionId', PaymentController.cancelSubscription); // Cancela assinatura de aluno ✅
 
 export default router;

@@ -201,9 +201,7 @@ export default class PaymentController {
 
 			// Cria assinatura no Pagar.me V5
 			const subscriptionPayload = {
-				customer: {
-					id: student.pagarmeCustomerId,
-				},
+				customer_id: student.pagarmeCustomerId,
 				payment_method: 'credit_card',
 				card_id: savedCard.pagarmeCardId,
 				items: [
@@ -258,43 +256,114 @@ export default class PaymentController {
 		}
 	}
 	/**
-	 * Cancelar assinatura
+	 * Listar assinaturas de um aluno
+	 */
+	static async listSubscriptions(req: Request, res: Response) {
+		try {
+			const { userId } = req.params;
+			const subscriptions = await prisma.subscription.findMany({
+				where: { userId },
+				orderBy: { createdAt: 'desc' },
+			});
+			res.json({ subscriptions });
+		} catch (error: any) {
+			console.error('Erro ao buscar assinaturas:', error.response?.data || error.message);
+			res.status(500).json({ message: 'Erro ao buscar assinaturas.' });
+		}
+	}
+	/**
+	 * Cancelar assinatura de aluno
 	 */
 	static async cancelSubscription(req: Request, res: Response) {
-		try {
-			const { subscriptionId } = req.params;
-			const { userId } = req.body;
+		const { userId, subscriptionId } = req.params;
 
+		if (!subscriptionId) {
+			return res.status(400).json({
+				error: 'ID da assinatura é obrigatório',
+			});
+		}
+
+		try {
+			// Buscar a assinatura no banco local
 			const subscription = await prisma.subscription.findUnique({
 				where: { id: subscriptionId },
+				include: {
+					user: true,
+					trainer: true,
+					plan: true,
+				},
 			});
 
 			if (!subscription) {
-				res.status(404).json({ message: 'Assinatura não encontrada.' });
-				return;
+				return res.status(404).json({
+					error: 'Assinatura não encontrada',
+				});
 			}
 
+			// Verificar se o usuário tem permissão para cancelar
 			if (subscription.userId !== userId) {
-				res.status(403).json({ message: 'Não autorizado.' });
+				return res.status(403).json({
+					error: 'Você não tem permissão para cancelar esta assinatura',
+				});
+			}
+
+			// Verificar se a assinatura já está cancelada
+			if (subscription.status === 'CANCELLED') {
+				return res.status(400).json({
+					error: 'Assinatura já está cancelada',
+				});
+			}
+
+			// Cancelar assinatura na Pagar.me
+			const { data, status, statusText } = await pagarmeApi.delete(
+				`/subscriptions/${subscription.pagarmeSubscriptionId}`
+			);
+
+			if (!data) {
+				const errorData = await data.json();
+				res.status(500).json(`Erro na Pagar.me: ${errorData.message || 'Erro desconhecido'}`);
 				return;
 			}
 
-			// Cancela no Pagar.me
-			await pagarmeApi.delete(`/subscriptions/${subscription.pagarmeSubscriptionId}`);
-
-			// Atualiza status local
-			await prisma.subscription.update({
+			// Atualizar status no banco local
+			const updatedSubscription = await prisma.subscription.update({
 				where: { id: subscriptionId },
 				data: {
 					status: 'CANCELLED',
 					endDate: new Date(),
+					updatedAt: new Date(),
 				},
 			});
 
-			res.json({ message: 'Assinatura cancelada com sucesso.' });
-		} catch (error: any) {
-			console.error('Erro ao cancelar assinatura:', error.response?.data || error.message);
-			res.status(500).json({ message: 'Erro ao cancelar assinatura.' });
+			return res.status(200).json({
+				message: 'Assinatura cancelada com sucesso',
+				subscription: {
+					id: updatedSubscription.id,
+					status: updatedSubscription.status,
+					endDate: updatedSubscription.endDate,
+					planName: subscription.plan.name,
+				},
+			});
+		} catch (error) {
+			console.error('Erro ao cancelar assinatura:', error);
+
+			// Rollback: tentar reverter mudanças no banco se houver erro
+			try {
+				await prisma.subscription.update({
+					where: { id: subscriptionId },
+					data: {
+						status: 'ACTIVE', // Reverter para status anterior
+						endDate: null,
+						updatedAt: new Date(),
+					},
+				});
+			} catch (rollbackError) {
+				console.error('Erro no rollback:', rollbackError);
+			}
+
+			return res.status(500).json({
+				error: 'Erro interno do servidor ao cancelar assinatura',
+			});
 		}
 	}
 	static async deleteSubscriptionModel(req: Request, res: Response) {

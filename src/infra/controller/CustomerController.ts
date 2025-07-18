@@ -203,6 +203,7 @@ export default class CustomerController {
 			res.status(500).json({ message: 'Erro ao buscar clientes.' });
 		}
 	}
+
 	/**
 	 * Salvar cartão do aluno
 	 */
