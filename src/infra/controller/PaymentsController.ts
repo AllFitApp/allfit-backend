@@ -1,6 +1,7 @@
 // infra/controller/PagarmeController.ts
 import pagarmeApi from '@/lib/axios';
 import { PrismaClient } from '@prisma/client';
+import dayjs from 'dayjs';
 import { Request, Response } from 'express';
 
 const prisma = new PrismaClient();
@@ -18,7 +19,7 @@ export default class PaymentController {
 			"unit": "aulas",
 			"icon": "calendar",
 			"highlighted": true
-      }]
+			}]
 	 */
 	static async createMonthlyModel(req: Request, res: Response) {
 		try {
@@ -223,6 +224,11 @@ export default class PaymentController {
 						amount: trainerAmount,
 						type: 'flat',
 					},
+					{
+						recipient_id: process.env.PLATFORM_WALLET_ID,
+						amount: platformFee,
+						type: 'flat',
+					}
 				],
 			};
 
@@ -237,9 +243,22 @@ export default class PaymentController {
 					pagarmeSubscriptionId: subscription.id,
 					status: 'ACTIVE',
 					planPrice: amount,
-					startDate: new Date(),
+					startDate: dayjs().toDate(),
 				},
 			});
+
+			if (subscription?.status !== 'active') {
+				res.status(400).json({ message: 'Assinatura falhou.' });
+			}
+			await prisma.wallet.update({
+				where: { userId: trainerId },
+				data: {
+					balance: {
+						increment: trainerAmount
+					}
+				}
+			});
+
 
 			res.status(201).json({
 				message: 'Assinatura criada com sucesso',
@@ -262,10 +281,22 @@ export default class PaymentController {
 		try {
 			const { userId } = req.params;
 			const subscriptions = await prisma.subscription.findMany({
-				where: { userId },
+				where: { OR: [{ userId }, { trainerId: userId }] },
 				orderBy: { createdAt: 'desc' },
+				include: {
+					user: true,
+				}
 			});
-			res.json({ subscriptions });
+			const formattedTransactions = subscriptions.filter((subscription) => subscription.status === 'ACTIVE').map((subscription) => ({
+				date: subscription.startDate,
+				name: subscription.user.name,
+				cpf: subscription.user.cpf,
+				email: subscription.user.email,
+				amount: subscription.planPrice,
+				status: subscription.status
+			}));
+
+			res.json(formattedTransactions);
 		} catch (error: any) {
 			console.error('Erro ao buscar assinaturas:', error.response?.data || error.message);
 			res.status(500).json({ message: 'Erro ao buscar assinaturas.' });
@@ -677,7 +708,7 @@ export default class PaymentController {
 					userId: studentId,
 					trainerId,
 					orderId: order.id,
-					amount,
+					amount: trainerAmount,
 					type: 'PAYMENT',
 					status: order.status,
 					paymentMethod,
@@ -685,10 +716,20 @@ export default class PaymentController {
 				},
 			});
 
-			res.status(200).json({
-				message: 'Pagamento processado',
-				order: { id: order.id, status: order.status, amount: order.amount },
-			});
+			if (order.status === 'paid') {
+				await prisma.wallet.update({
+					where: { userId: trainerId },
+					data: {
+						balance: {
+							increment: trainerAmount
+						}
+					}
+				});
+				res.status(200).json({
+					message: 'Pagamento processado',
+					order: { id: order.id, status: order.status, amount: order.amount },
+				});
+			}
 		} catch (error: any) {
 			console.error('Erro no pagamento:', error.response?.data || error.message);
 			console.log('Erro geral: ', error);
@@ -734,26 +775,16 @@ export default class PaymentController {
 			});
 
 			// Formatar os dados conforme solicitado
-			const formattedTransactions = transactions.map((transaction) => {
-				// Determinar se é entrada ou saída baseado no tipo de transação
-				let status = 'entrada';
-				if (transaction.type === 'WITHDRAWAL') {
-					status = 'saída';
-				} else if (transaction.type === 'REFUND') {
-					status = 'estorno';
-				} else if (transaction.type === 'FEE') {
-					status = 'taxa';
-				}
-
-				return {
+			const formattedTransactions = transactions
+				.filter((transaction) => transaction.status === 'paid')
+				.map((transaction) => ({
 					date: transaction.createdAt.toLocaleDateString('pt-BR'),
 					name: transaction?.user?.name || 'Nome não informado',
 					cpf: transaction?.user?.cpf || 'CPF não informado',
 					email: transaction?.user?.email || 'Email não informado',
 					amount: transaction.amount, // converter de centavos para reais
-					status: status,
-				};
-			});
+					status: transaction.status,
+				}));
 
 			res.json({
 				transactions: formattedTransactions,

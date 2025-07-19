@@ -6,7 +6,6 @@ import { Request, Response } from 'express';
 
 const prisma = new PrismaClient();
 
-const SYNC_INTERVAL = 5 * 60 * 1000; // 5 minutos
 
 export default class RecipientController {
 	/**
@@ -278,35 +277,25 @@ export default class RecipientController {
 			const agora = Date.now();
 			const diff = agora - wallet.lastSynced.getTime();
 
-			// Se já sincronizou recentemente, retorna saldo local
-			if (diff < SYNC_INTERVAL) {
-				res.json({
-					balance: wallet.balance,
-					source: 'local',
-					lastSynced: wallet.lastSynced,
-				});
-				return;
-			}
-
 			// Sincroniza com Pagar.me
-			const { data: balance } = await pagarmeApi.get(`/recipients/${wallet.pagarmeWalletId}/balance`);
+			// const { data: balance } = await pagarmeApi.get(`/recipients/${wallet.pagarmeWalletId}/balance`);
 
-			const currentBalance = balance.available_amount || 0;
+			// const currentBalance = balance.available_amount || 0;
 
 			// Atualiza saldo local
-			const updatedWallet = await prisma.wallet.update({
-				where: { userId },
-				data: {
-					balance: currentBalance,
-					lastSynced: new Date(),
-				},
-			});
+			// const updatedWallet = await prisma.wallet.update({
+			// 	where: { userId },
+			// 	data: {
+			// 		balance: currentBalance,
+			// 		lastSynced: new Date(),
+			// 	},
+			// });
 
 			res.json({
-				balance: currentBalance,
+				balance: wallet.balance,
 				source: 'pagarme',
-				lastSynced: updatedWallet.lastSynced,
-				waiting_funds: balance.waiting_funds_amount || 0,
+				// lastSynced: updatedWallet.lastSynced,
+				// waiting_funds: balance.waiting_funds_amount || 0,
 			});
 		} catch (error: any) {
 			console.error('Erro ao consultar saldo:', error.response?.data || error.message);
@@ -803,4 +792,262 @@ export default class RecipientController {
 			res.status(500).json({ message: 'Erro interno' });
 		}
 	};
+	/**
+	* Atualiza o saldo da carteira de um treinador
+	*/
+	static async updateTrainerBalance(
+		trainerId: string,
+		amount: number,
+		operation: 'increment' | 'decrement' = 'increment',
+		description?: string
+	) {
+		try {
+			// Verificar se o treinador tem carteira
+			const wallet = await prisma.wallet.findUnique({
+				where: { userId: trainerId }
+			});
+
+			if (!wallet) {
+				throw new Error('Carteira não encontrada para o treinador');
+			}
+
+			// Atualizar saldo
+			const updatedWallet = await prisma.wallet.update({
+				where: { userId: trainerId },
+				data: {
+					balance: {
+						[operation]: Math.abs(amount)
+					},
+					lastSynced: new Date()
+				}
+			});
+
+			console.log(`Saldo da carteira ${operation === 'increment' ? 'creditado' : 'debitado'}: 
+        Treinador: ${trainerId}
+        Valor: ${amount} centavos
+        Saldo anterior: ${wallet.balance} centavos
+        Saldo atual: ${updatedWallet.balance} centavos
+      `);
+
+			return updatedWallet;
+
+		} catch (error) {
+			console.error('Erro ao atualizar saldo da carteira:', error);
+			throw error;
+		}
+	}
+	/**
+	 * Registra uma transação de crédito na carteira
+	 */
+	static async recordCreditTransaction(
+		trainerId: string,
+		amount: number,
+		orderId: string,
+		description: string
+	) {
+		try {
+			const transaction = await prisma.transaction.create({
+				data: {
+					trainerId,
+					amount,
+					type: 'PAYMENT',
+					status: 'paid',
+					description,
+					orderId
+				}
+			});
+
+			console.log(`Transação de crédito registrada:
+        ID: ${transaction.id}
+        Treinador: ${trainerId}
+        Valor: ${amount} centavos
+        Descrição: ${description}
+      `);
+
+			return transaction;
+
+		} catch (error) {
+			console.error('Erro ao registrar transação de crédito:', error);
+			throw error;
+		}
+	}
+	/**
+	 * Registra uma transação de débito/estorno na carteira
+	 */
+	static async recordDebitTransaction(
+		trainerId: string,
+		amount: number,
+		orderId: string,
+		type: 'REFUND' | 'WITHDRAWAL' = 'REFUND',
+		description: string
+	) {
+		try {
+			const transaction = await prisma.transaction.create({
+				data: {
+					trainerId,
+					amount: -Math.abs(amount), // sempre negativo para débitos
+					type,
+					status: type === 'REFUND' ? 'refunded' : 'completed',
+					description,
+					orderId
+				}
+			});
+
+			console.log(`Transação de débito registrada:
+        ID: ${transaction.id}
+        Treinador: ${trainerId}
+        Valor: ${-Math.abs(amount)} centavos
+        Tipo: ${type}
+        Descrição: ${description}
+      `);
+
+			return transaction;
+
+		} catch (error) {
+			console.error('Erro ao registrar transação de débito:', error);
+			throw error;
+		}
+	}
+	/**
+	 * Calcula o valor líquido que o treinador recebe (descontando taxa da plataforma)
+	 */
+	static calculateTrainerAmount(grossAmount: number, platformTaxRate: number = 0.1): number {
+		const platformFee = Math.floor(grossAmount * platformTaxRate);
+		return grossAmount - platformFee;
+	}
+	/**
+	 * Processa split de pagamento do Pagar.me
+	 */
+	static async processPagarmeOrderSplit(
+		orderId: string,
+		orderData: any,
+		transaction: any
+	) {
+		try {
+			if (!orderData.charges || !orderData.charges[0]?.last_transaction?.splits) {
+				console.log('Nenhum split encontrado no pedido');
+				return;
+			}
+
+			const splits = orderData.charges[0].last_transaction.splits;
+			const trainerWalletId = transaction.trainer?.wallet?.pagarmeWalletId;
+
+			if (!trainerWalletId) {
+				console.log('Wallet ID do treinador não encontrado');
+				return;
+			}
+
+			// Encontrar o split do treinador
+			const trainerSplit = splits.find((split: any) =>
+				split.recipient_id === trainerWalletId
+			);
+
+			if (!trainerSplit) {
+				console.log('Split do treinador não encontrado');
+				return;
+			}
+
+			const trainerAmount = trainerSplit.amount;
+			console.log(`Valor do split do treinador: ${trainerAmount} centavos`);
+
+			// Atualizar saldo da carteira
+			await this.updateTrainerBalance(
+				transaction.trainerId,
+				trainerAmount,
+				'increment',
+				`Crédito de venda - Pedido ${orderId}`
+			);
+
+			// Registrar transação
+			await this.recordCreditTransaction(
+				transaction.trainerId,
+				trainerAmount,
+				orderId,
+				`Crédito de venda - Pedido ${orderId}`
+			);
+
+			return { success: true, amount: trainerAmount };
+
+		} catch (error) {
+			console.error('Erro ao processar split do pedido:', error);
+			throw error;
+		}
+	}
+
+	/**
+	 * Obter saldo atual da carteira
+	 */
+	static async getWalletBalance(trainerId: string) {
+		try {
+			const wallet = await prisma.wallet.findUnique({
+				where: { userId: trainerId },
+				select: { balance: true, lastSynced: true }
+			});
+
+			if (!wallet) {
+				throw new Error('Carteira não encontrada');
+			}
+
+			return wallet;
+
+		} catch (error) {
+			console.error('Erro ao obter saldo da carteira:', error);
+			throw error;
+		}
+	}
+
+	/**
+	 * Criar carteira para um novo treinador
+	 */
+	static async createTrainerWallet(trainerId: string, pagarmeWalletId?: string) {
+		try {
+			const wallet = await prisma.wallet.create({
+				data: {
+					userId: trainerId,
+					pagarmeWalletId,
+					balance: 0
+				}
+			});
+
+			console.log(`Carteira criada para treinador ${trainerId}`);
+			return wallet;
+
+		} catch (error) {
+			console.error('Erro ao criar carteira:', error);
+			throw error;
+		}
+	}
+
+	/**
+	 * Listar histórico de transações da carteira
+	 */
+	static async getWalletHistory(
+		trainerId: string,
+		limit: number = 50,
+		offset: number = 0
+	) {
+		try {
+			const transactions = await prisma.transaction.findMany({
+				where: { trainerId },
+				orderBy: { createdAt: 'desc' },
+				take: limit,
+				skip: offset,
+				select: {
+					id: true,
+					amount: true,
+					type: true,
+					status: true,
+					description: true,
+					createdAt: true,
+					orderId: true
+				}
+			});
+
+			return transactions;
+
+		} catch (error) {
+			console.error('Erro ao obter histórico da carteira:', error);
+			throw error;
+		}
+	}
 }
