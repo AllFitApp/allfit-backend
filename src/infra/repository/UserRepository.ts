@@ -22,7 +22,8 @@ export default class UserRepository {
 			userFound.password,
 			userFound.number,
 			userFound.email,
-			userFound.role
+			userFound.role,
+			userFound.cpf || ''
 		);
 	}
 
@@ -35,6 +36,7 @@ export default class UserRepository {
 			number: user.number,
 			email: user.email,
 			role: user.role,
+			cpf: user.cpf,
 		});
 		return userCreated;
 	}

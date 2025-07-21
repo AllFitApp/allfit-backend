@@ -15,7 +15,7 @@ export default class ProfileController {
 			const { username } = req.params;
 
 			// Verifica se o perfil existe
-			const profile = await prisma.profile.findUnique({ where: { username: username } });
+			const profile = await prisma.profile.findUnique({ where: { username: username }, include: { user: { select: { id: true, role: true } } } });
 
 			if (!profile) {
 				// Se não houver perfil, buscar informações básicas do usuário
