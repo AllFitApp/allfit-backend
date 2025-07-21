@@ -642,6 +642,187 @@ export default class RecipientController {
 		}
 	};
 
+	withdrawFromWallet = async (req: Request, res: Response) => {
+		const { userId, amount, } = req.body;
+
+		console.log('Saque solicitado:', { userId, amount });
+		// Validações básicas
+		if (!userId) {
+			return {
+				success: false,
+				message: 'ID do usuário é obrigatório'
+			};
+		}
+
+		if (amount <= 0) {
+			return {
+				success: false,
+				message: 'Valor do saque deve ser maior que zero'
+			};
+		}
+
+		// Valor mínimo de saque (R$ 10,00)
+		if (amount < 1000) {
+			return {
+				success: false,
+				message: 'Valor mínimo para saque é R$ 10,00'
+			};
+		}
+
+		try {
+			console.log('Processando saque...');
+			return await prisma.$transaction(async (tx) => {
+				console.log('Transação iniciada...');
+				// Buscar a carteira do usuário
+				const wallet = await tx.wallet.findUnique({
+					where: { userId },
+					include: {
+						user: {
+							select: {
+								id: true,
+								name: true,
+								email: true,
+								recipientInfo: true
+							}
+						}
+					}
+				});
+
+				if (!wallet) {
+					throw new Error('Carteira não encontrada');
+				}
+
+				// Verificar se o usuário tem informações bancárias
+				if (!wallet.user.recipientInfo) {
+					throw new Error('Informações bancárias não cadastradas');
+				}
+
+				// Verificar saldo suficiente
+				if (wallet.balance < amount) {
+					throw new Error(`Saldo insuficiente. Saldo atual: R$ ${(wallet.balance / 100).toFixed(2)}`);
+				}
+
+
+				// Atualizar saldo da carteira
+				const updatedWallet = await tx.wallet.update({
+					where: { userId },
+					data: {
+						balance: {
+							decrement: amount
+						},
+						lastSynced: new Date()
+					}
+				});
+
+				// Criar registro da transação
+				const transaction = await tx.transaction.create({
+					data: {
+						userId,
+						amount: -amount, // valor negativo para saque
+						type: 'WITHDRAWAL',
+						status: 'completed',
+						paymentMethod: 'bank_transfer'
+					}
+				});
+
+				res.status(200).json({
+
+					ok: true,
+					message: `Saque de R$ ${(amount / 100).toFixed(2)} realizado com sucesso`,
+					transaction: {
+						id: transaction.id,
+						amount: transaction.amount,
+						status: transaction.status,
+						createdAt: transaction.createdAt
+					},
+					newBalance: updatedWallet.balance
+				});
+			});
+
+		} catch (error) {
+			console.error('Erro ao processar saque:', error);
+
+			return {
+				success: false,
+				message: error instanceof Error ? error.message : 'Erro interno do servidor'
+			};
+		}
+	};
+
+	// Função auxiliar para obter histórico de saques
+	getWithdrawHistory = async (userId: string, limit: number = 10) => {
+		try {
+			const withdrawals = await prisma.transaction.findMany({
+				where: {
+					userId,
+					type: 'WITHDRAWAL'
+				},
+				orderBy: {
+					createdAt: 'desc'
+				},
+				take: limit,
+				select: {
+					id: true,
+					amount: true,
+					status: true,
+					description: true,
+					paymentMethod: true,
+					createdAt: true
+				}
+			});
+
+			return {
+				success: true,
+				withdrawals: withdrawals.map(w => ({
+					...w,
+					amount: Math.abs(w.amount), // converter para valor positivo para exibição
+					formattedAmount: `R$ ${(Math.abs(w.amount) / 100).toFixed(2)}`
+				}))
+			};
+
+		} catch (error) {
+			console.error('Erro ao buscar histórico de saques:', error);
+			return {
+				success: false,
+				message: 'Erro ao buscar histórico de saques'
+			};
+		}
+	};
+
+	// Função para verificar saldo da carteira
+	getWalletBalance = async (userId: string) => {
+		try {
+			const wallet = await prisma.wallet.findUnique({
+				where: { userId },
+				select: {
+					balance: true,
+					lastSynced: true
+				}
+			});
+
+			if (!wallet) {
+				return {
+					success: false,
+					message: 'Carteira não encontrada'
+				};
+			}
+
+			return {
+				success: true,
+				balance: wallet.balance,
+				formattedBalance: `R$ ${(wallet.balance / 100).toFixed(2)}`,
+				lastSynced: wallet.lastSynced
+			};
+
+		} catch (error) {
+			console.error('Erro ao consultar saldo:', error);
+			return {
+				success: false,
+				message: 'Erro ao consultar saldo'
+			};
+		}
+	};
+
 	// Método adicional para verificar se pode sacar
 	canWithdraw = async (req: Request, res: Response) => {
 		try {
@@ -723,75 +904,75 @@ export default class RecipientController {
 	};
 
 	// Método para histórico de saques
-	getWithdrawHistory = async (req: Request, res: Response) => {
-		try {
-			const { userId } = req.params;
-			const { page = 1, limit = 10 } = req.query;
+	// getWithdrawHistory = async (req: Request, res: Response) => {
+	// 	try {
+	// 		const { userId } = req.params;
+	// 		const { page = 1, limit = 10 } = req.query;
 
-			const pageNumber = parseInt(page as string);
-			const limitNumber = parseInt(limit as string);
-			const offset = (pageNumber - 1) * limitNumber;
+	// 		const pageNumber = parseInt(page as string);
+	// 		const limitNumber = parseInt(limit as string);
+	// 		const offset = (pageNumber - 1) * limitNumber;
 
-			const user = await prisma.user.findUnique({
-				where: { id: userId },
-				select: { role: true },
-			});
+	// 		const user = await prisma.user.findUnique({
+	// 			where: { id: userId },
+	// 			select: { role: true },
+	// 		});
 
-			if (!user) {
-				res.status(404).json({ message: 'Usuário não encontrado' });
-				return;
-			}
+	// 		if (!user) {
+	// 			res.status(404).json({ message: 'Usuário não encontrado' });
+	// 			return;
+	// 		}
 
-			if (user.role !== 'TRAINER') {
-				res.status(400).json({ message: 'Apenas treinadores podem ver histórico de saques' });
-				return;
-			}
+	// 		if (user.role !== 'TRAINER') {
+	// 			res.status(400).json({ message: 'Apenas treinadores podem ver histórico de saques' });
+	// 			return;
+	// 		}
 
-			const [transactions, total] = await Promise.all([
-				prisma.transaction.findMany({
-					where: {
-						trainerId: userId,
-						type: 'WITHDRAWAL',
-					},
-					orderBy: {
-						createdAt: 'desc',
-					},
-					skip: offset,
-					take: limitNumber,
-					select: {
-						id: true,
-						amount: true,
-						status: true,
-						description: true,
-						createdAt: true,
-						transferId: true,
-						paymentMethod: true,
-					},
-				}),
-				prisma.transaction.count({
-					where: {
-						trainerId: userId,
-						type: 'WITHDRAWAL',
-					},
-				}),
-			]);
+	// 		const [transactions, total] = await Promise.all([
+	// 			prisma.transaction.findMany({
+	// 				where: {
+	// 					trainerId: userId,
+	// 					type: 'WITHDRAWAL',
+	// 				},
+	// 				orderBy: {
+	// 					createdAt: 'desc',
+	// 				},
+	// 				skip: offset,
+	// 				take: limitNumber,
+	// 				select: {
+	// 					id: true,
+	// 					amount: true,
+	// 					status: true,
+	// 					description: true,
+	// 					createdAt: true,
+	// 					transferId: true,
+	// 					paymentMethod: true,
+	// 				},
+	// 			}),
+	// 			prisma.transaction.count({
+	// 				where: {
+	// 					trainerId: userId,
+	// 					type: 'WITHDRAWAL',
+	// 				},
+	// 			}),
+	// 		]);
 
-			res.json({
-				transactions,
-				pagination: {
-					page: pageNumber,
-					limit: limitNumber,
-					total,
-					totalPages: Math.ceil(total / limitNumber),
-					hasNext: pageNumber * limitNumber < total,
-					hasPrev: pageNumber > 1,
-				},
-			});
-		} catch (error: any) {
-			console.error('Erro ao buscar histórico de saques:', error);
-			res.status(500).json({ message: 'Erro interno' });
-		}
-	};
+	// 		res.json({
+	// 			transactions,
+	// 			pagination: {
+	// 				page: pageNumber,
+	// 				limit: limitNumber,
+	// 				total,
+	// 				totalPages: Math.ceil(total / limitNumber),
+	// 				hasNext: pageNumber * limitNumber < total,
+	// 				hasPrev: pageNumber > 1,
+	// 			},
+	// 		});
+	// 	} catch (error: any) {
+	// 		console.error('Erro ao buscar histórico de saques:', error);
+	// 		res.status(500).json({ message: 'Erro interno' });
+	// 	}
+	// };
 	/**
 	* Atualiza o saldo da carteira de um treinador
 	*/

@@ -103,21 +103,21 @@ export default class PaymentController {
 	 */
 	static async getTrainerPlans(req: Request, res: Response) {
 		try {
-			const { trainerId } = req.params;
+			const { username } = req.params;
 
 			const plans = await prisma.plan.findMany({
 				where: {
-					trainerId,
+					trainerUsername: username,
 					isActive: true,
 				},
 				omit: {
 					trainerId: true,
-					trainerUsername: true,
+					// trainerUsername: true,
 				},
 				orderBy: { createdAt: 'desc' },
 			});
 
-			res.json({ plans: plans });
+			res.json(plans);
 		} catch (error: any) {
 			console.error('Erro ao buscar planos:', error.response?.data || error.message);
 			res.status(500).json({ message: 'Erro ao buscar planos.' });
@@ -188,7 +188,7 @@ export default class PaymentController {
 
 			// Busca cartão salvo
 			const savedCard = await prisma.savedCard.findUnique({
-				where: { id: cardId },
+				where: { id: Number(cardId) },
 			});
 
 			if (!savedCard || savedCard.userId !== studentId) {
@@ -512,6 +512,7 @@ export default class PaymentController {
 				where: { trainerUsername: username },
 
 				select: {
+					id: true,
 					name: true,
 					description: true,
 					price: true,
@@ -616,7 +617,7 @@ export default class PaymentController {
 						return;
 					}
 
-					const savedCard = await prisma.savedCard.findUnique({ where: { id: cardId } });
+					const savedCard = await prisma.savedCard.findUnique({ where: { id: Number(cardId) } });
 					if (!savedCard || savedCard.userId !== studentId) {
 						res.status(404).json({ message: 'Cartão não encontrado.' });
 						return;
@@ -651,7 +652,7 @@ export default class PaymentController {
 						return;
 					}
 
-					const savedCard = await prisma.savedCard.findUnique({ where: { id: cardId } });
+					const savedCard = await prisma.savedCard.findUnique({ where: { id: Number(cardId) } });
 					if (!savedCard || savedCard.userId !== studentId) {
 						res.status(404).json({ message: 'Cartão não encontrado.' });
 						return;

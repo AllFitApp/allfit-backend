@@ -11,7 +11,7 @@ router.get('/single-workout/:username', PaymentController.getSingleWorkout); // 
 router.delete('/single-workout', PaymentController.deleteSingleWorkout); // Deleta plano de aula avulsa
 
 router.post('/plan', PaymentController.createMonthlyModel); // Cria modelo de assinatura ✅
-router.get('/plans', PaymentController.getTrainerPlans); // Lista planos criados do treinador ✅
+router.get('/plans/:username', PaymentController.getTrainerPlans); // Lista planos criados do treinador ✅
 router.get('/transactions/:userId', PaymentController.getTransactions); // Lista transações ✅
 router.delete('/plan/:planId', PaymentController.deleteSubscriptionModel); // Deleta plano ✅ (necessita de método rollback)
 
