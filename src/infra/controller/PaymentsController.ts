@@ -24,8 +24,7 @@ export default class PaymentController {
 	static async createMonthlyModel(req: Request, res: Response) {
 		try {
 			const { userId, name, description, price, features } = req.body;
-
-			const user = await prisma.user.findUnique({
+		const user = await prisma.user.findUnique({
 				where: { id: userId },
 				select: { role: true, username: true, wallet: { select: { pagarmeWalletId: true } } },
 			});
@@ -46,7 +45,7 @@ export default class PaymentController {
 				res.status(400).json({ message: 'O valor do plano deve ser maior que R$ 10,00.' });
 				return;
 			}
-
+		
 			const payload = {
 				interval: 'month',
 				interval_count: 1,
@@ -69,6 +68,11 @@ export default class PaymentController {
 				return;
 			}
 
+			if (!user) {
+				res.status(404).json({ message: 'Usuário não encontrado.' });
+				return;
+			}
+
 			const plan = await prisma.plan.create({
 				data: {
 					trainerId: userId,
@@ -80,7 +84,7 @@ export default class PaymentController {
 					features,
 					isActive: true,
 				},
-			});
+			});			
 
 			res.status(201).json({
 				message: 'Plano criado com sucesso',
@@ -799,6 +803,43 @@ export default class PaymentController {
 		} catch (error: any) {
 			console.error('Erro ao buscar transações:', error.response?.data || error.message);
 			res.status(500).json({ message: 'Erro ao buscar transações.' });
+		}
+	}
+
+	static async editPlans(req: Request, res: Response) {
+		try {
+			const { planId } = req.params;
+			const { name, description, price, features } = req.body;
+			const plan = await prisma.plan.findUnique({ where: { id: planId } });
+			if (!plan) {
+				res.status(404).json({ message: 'Plano não encontrado.' });
+				return;
+			}
+			const updatedPlan = await prisma.plan.update({
+				where: { id: planId },
+				data: {
+					name,
+					description,
+					price: Math.floor(price * 100), // converter para centavos
+					features,
+				},
+			});
+			res.json({
+				message: 'Plano atualizado com sucesso.',
+				plan: {
+					id: updatedPlan.id,
+					name: updatedPlan.name,
+					description: updatedPlan.description,
+					price: updatedPlan.price,
+					features: updatedPlan.features,
+					isActive: updatedPlan.isActive,
+				},
+				priceFormatted: (updatedPlan.price / 100).toFixed(2),
+			});
+		}
+		catch (error: any) {
+			console.error('Erro ao editar plano:', error.message);
+			res.status(500).json({ message: 'Erro ao editar plano.' });
 		}
 	}
 }
