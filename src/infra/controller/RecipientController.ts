@@ -47,6 +47,8 @@ export default class RecipientController {
 				return;
 			}
 
+			console.log(`Criando carteira para treinador CPF ${userId}, ${user.cpf}`);
+
 			const recipientPayload = {
 				register_information: {
 					phone_numbers: [

@@ -25,7 +25,6 @@ router.use('/payments', paymentsRouter);
 router.use('/wallet', walletRouter);
 router.use('/customer', customerRouter);
 
-
 // (async () => {
 // 	const url = await ngrok.connect({
 // 		addr: 3002,

@@ -94,6 +94,54 @@ export default class ProfileController {
 		}
 	}
 
+	static async updateMartketImage(req: Request, res: Response): Promise<void> {
+		try {
+			const { id } = req.params;
+			if (!req.file) {
+				res.status(400).json({ message: 'Nenhuma imagem enviada' });
+				return;
+			}
+
+			const fileExt = path.extname(req.file.originalname);
+			const fileName = `market-${Date.now()}${fileExt}`;
+			const filePath = fileName;
+
+			const { data: uploadData, error: uploadError } = await supabase.storage
+				.from('market-image')
+				.upload(filePath, req.file.buffer, {
+					contentType: req.file.mimetype,
+					upsert: true,
+				});
+
+			if (uploadError) {
+				console.error('Erro no upload de imagem:', uploadError);
+				res.status(500).json({ message: 'Erro ao enviar imagem' });
+				return;
+			}
+
+			const { data: publicData } = supabase.storage.from('market-image').getPublicUrl(uploadData.path);
+
+			if (!publicData?.publicUrl) {
+				res.status(500).json({ message: 'Não foi possível obter URL do avatar' });
+				return;
+			}
+
+			const updatedProfile = await prisma.profile.update({
+				where: { id },
+				data: {
+					marketImage: publicData.publicUrl,
+				},
+			});
+
+			res.status(200).json({ profile: updatedProfile });
+		} catch (err) {
+			console.error('Erro ao atualizar market image:', err);
+			if (!res.headersSent) {
+				res.status(500).json({ message: 'Erro ao atualizar market image', err });
+			}
+		}
+	}
+
 	static async createProfile(req: Request, res: Response): Promise<void> {
 		try {
 			const { id } = req.params;
@@ -114,7 +162,6 @@ export default class ProfileController {
 		}
 	}
 
-	// Novo método para atualizar o perfil do usuário
 	static async updateProfile(req: Request, res: Response): Promise<void> {
 		try {
 			const { id } = req.params;
@@ -129,6 +176,114 @@ export default class ProfileController {
 		} catch (err) {
 			console.log(err);
 			res.status(500).json({ message: 'Error updating profile', err });
+		}
+	}
+
+	static async listUsers(req: Request, res: Response): Promise<void> {
+		try {
+			const users = await prisma.profile.findMany({
+				where: { user: { role: 'USER' } },
+			});
+			res.status(200).json(users);
+		} catch (err) {
+			res.status(500).json({ message: 'Error fetching users', err });
+		}
+	}
+
+	static async listTrainers(req: Request, res: Response): Promise<void> {
+		try {
+			const { search, limit, page } = req.query;
+
+			// Parâmetros de paginação
+			const limitNumber = limit ? parseInt(limit as string, 10) : 10; // Padrão: 10 itens
+			const pageNumber = page ? parseInt(page as string, 10) : 1; // Padrão: página 1
+			const offset = (pageNumber - 1) * limitNumber;
+
+			// Valida os parâmetros de paginação
+			if (limitNumber <= 0 || pageNumber <= 0) {
+				res.status(400).json({
+					message: 'Os parâmetros limit e page devem ser números positivos'
+				});
+				return;
+			}
+
+			// Constrói o filtro base
+			const whereClause: any = {
+				user: { role: 'TRAINER' }
+			};
+
+			if (search && typeof search === 'string' && search.trim() !== '') {
+				const searchTerm = search.trim();
+
+				whereClause.AND = [
+					{ user: { role: 'TRAINER' } },
+					{
+						OR: [
+							// Busca no nome do perfil
+							{
+								name: {
+									contains: searchTerm,
+									mode: 'insensitive'
+								}
+							},
+							// Busca no username do usuário
+							{
+								user: {
+									username: {
+										contains: searchTerm,
+										mode: 'insensitive'
+									},
+									role: 'TRAINER'
+								}
+							},
+						]
+					}
+				];
+			}
+
+			// Busca os trainers com paginação
+			const [trainers, totalCount] = await Promise.all([
+				prisma.profile.findMany({
+					where: whereClause,
+					include: {
+						user: {
+							select: {
+								username: true,
+								email: true
+							}
+						}
+					},
+					orderBy: [
+						{ name: 'asc' }
+					],
+					skip: offset,
+					take: limitNumber
+				}),
+				// Conta o total de registros para informações de paginação
+				prisma.profile.count({
+					where: whereClause
+				})
+			]);
+
+			// Calcula informações de paginação
+			const totalPages = Math.ceil(totalCount / limitNumber);
+			const hasNextPage = pageNumber < totalPages;
+			const hasPreviousPage = pageNumber > 1;
+
+			res.status(200).json({
+				data: trainers,
+				pagination: {
+					currentPage: pageNumber,
+					totalPages,
+					totalItems: totalCount,
+					itemsPerPage: limitNumber,
+					hasNextPage,
+					hasPreviousPage
+				}
+			});
+		} catch (err) {
+			console.error('Error fetching trainers:', err);
+			res.status(500).json({ message: 'Error fetching trainers', err });
 		}
 	}
 }
