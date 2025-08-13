@@ -4,6 +4,57 @@ import { Request, Response } from 'express';
 const prisma = new PrismaClient();
 
 export default class AppointmentController {
+	static async addTrainerSchedule(req: Request, res: Response): Promise<void> {
+		try {
+			const { id, horarios } = req.body;
+			// schedule = Days[] conforme enviado do front-end
+
+			if (!id || !Array.isArray(horarios)) {
+				res.status(400).json({ message: 'Trainer ID e schedule são obrigatórios' });
+				return;
+			}
+
+			// Verifica se o treinador existe
+			const trainer = await prisma.user.findUnique({ where: { id } });
+			if (!trainer || trainer.role !== 'TRAINER') {
+				res.status(404).json({ message: 'Treinador não encontrado' });
+				return;
+			}
+
+			// Upsert para criar ou atualizar
+			const savedSchedule = await prisma.trainerHorarios.upsert({
+				where: { trainerId: id },
+				update: { horarios },
+				create: { trainerId: id, horarios },
+			});
+
+			res.status(200).json(savedSchedule);
+		} catch (err) {
+			console.error('Erro ao salvar agenda do treinador:', err);
+			res.status(500).json({ message: 'Erro ao salvar agenda', err });
+		}
+	}
+
+	static async getTrainerSchedule(req: Request, res: Response): Promise<void> {
+		try {
+			const { id } = req.params;
+
+			const schedule = await prisma.trainerHorarios.findUnique({
+				where: { trainerId: id },
+			});
+
+			if (!schedule) {
+				res.status(404).json({ message: 'Agenda não encontrada' });
+				return;
+			}
+
+			res.status(200).json(schedule);
+		} catch (err) {
+			console.error('Erro ao buscar agenda do treinador:', err);
+			res.status(500).json({ message: 'Erro ao buscar agenda', err });
+		}
+	}
+
 	static async getAll(req: Request, res: Response): Promise<void> {
 		try {
 			const appointments = await prisma.appointment.findMany({

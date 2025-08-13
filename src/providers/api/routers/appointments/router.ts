@@ -12,4 +12,7 @@ router.get('/by-month/:year/:month/:id', AppointmentController.getByMonth);
 router.put('/:id', AppointmentController.update);
 router.delete('/:id', AppointmentController.delete);
 
+router.post('/horarios', AppointmentController.addTrainerSchedule);
+router.get('/horarios/:id', AppointmentController.getTrainerSchedule);
+
 export default router;

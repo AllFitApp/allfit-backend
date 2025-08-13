@@ -21,7 +21,6 @@ model User {
 
   pagarmeCustomerId String? @unique @map("pagarme_customer_id")
 
-  // Relations
   profile       Profile?
   likes         PostLike[]
   wallet        Wallet?
@@ -31,21 +30,17 @@ model User {
   recipientInfo RecipientInfo?
   addresses     Address?
 
-  // Appointments
-  trainerAppointments Appointment[] @relation("TrainerAppointments")
+  trainerHorarios     TrainerHorarios?
+  trainerAppointments Appointment[]    @relation("TrainerAppointments")
 
-  // Transactions
   transactions        Transaction[] @relation("UserTransactions")
   trainerTransactions Transaction[] @relation("TrainerTransactions")
 
-  // Subscriptions
   subscriptions        Subscription[] @relation("UserSubscriptions")
   trainerSubscriptions Subscription[] @relation("TrainerSubscriptions")
 
-  // Mini Store - Produtos
   products Product[] @relation("TrainerProducts")
-  
-  // Orders - Pedidos como comprador e vendedor
+
   orders        Order[] @relation("CustomerOrders")
   trainerOrders Order[] @relation("TrainerOrders")
 
@@ -65,7 +60,7 @@ model Profile {
   followers         Int
   rate              Float
   avatar            String
-  marketImage				String
+  marketImage       String?
   formation         String?
   specialty         String?
   onlineService     String?
@@ -187,6 +182,18 @@ model PostLike {
   @@map("post_likes")
 }
 
+model TrainerHorarios {
+  id        Int      @id @default(autoincrement())
+  trainerId String   @unique
+  horarios  Json // [{ day: "monday", intervals: [{ start: 8, end: 12 }, ...] }]
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  trainer User @relation(fields: [trainerId], references: [id], onDelete: Cascade)
+
+  @@map("trainer_horarios")
+}
+
 // === SISTEMA DE PAGAMENTOS ===
 
 model Wallet {
@@ -225,7 +232,7 @@ model Plan {
   id              String   @id @default(uuid())
   trainerUsername String   @map("trainer_username")
   trainerId       String   @map("trainer_id")
-	pagarmePlanId		String   @unique @map("pagarme_plan_id")
+  pagarmePlanId   String   @unique @map("pagarme_plan_id")
   name            String
   description     String?
   category        String?
@@ -287,27 +294,27 @@ model SingleWorkout {
 // === MINI LOJA - PRODUTOS ===
 
 model Product {
-  id          Int           @id @default(autoincrement())
-  trainerId   String        @map("trainer_id")
-  name        String        @db.VarChar(255)
-  description String?       @db.Text
-  price       Int           // em centavos
+  id          Int         @id @default(autoincrement())
+  trainerId   String      @map("trainer_id")
+  name        String      @db.VarChar(255)
+  description String?     @db.Text
+  price       Int // em centavos
   type        ProductType
-  category    String?       @db.VarChar(100)
-  images      String[]      // URLs das imagens
-  
+  category    String?     @db.VarChar(100)
+  images      String[] // URLs das imagens
+
   // Especificações do produto (tamanhos, cores, etc.)
   specifications Json?
-  
+
   // Controle de estoque opcional (null = infinito)
-  stockQuantity  Int?        @map("stock_quantity")
-  
+  stockQuantity Int? @map("stock_quantity")
+
   // Status
-  isActive       Boolean     @default(true) @map("is_active")
-  
+  isActive Boolean @default(true) @map("is_active")
+
   // Timestamps
-  createdAt      DateTime    @default(now()) @map("created_at")
-  updatedAt      DateTime    @updatedAt @map("updated_at")
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
 
   // Relations
   trainer    User        @relation("TrainerProducts", fields: [trainerId], references: [id], onDelete: Cascade)
@@ -319,29 +326,29 @@ model Product {
 }
 
 model Order {
-  id            String      @id @default(uuid())
-  customerId    String      @map("customer_id")
-  trainerId     String      @map("trainer_id")
-  orderNumber   String      @unique @map("order_number") // Número sequencial amigável
-  
+  id          String @id @default(uuid())
+  customerId  String @map("customer_id")
+  trainerId   String @map("trainer_id")
+  orderNumber String @unique @map("order_number") // Número sequencial amigável
+
   // Total
-  totalAmount   Int         @map("total_amount") // em centavos
-  
+  totalAmount Int @map("total_amount") // em centavos
+
   // Status e pagamento
   status        String
-  paymentMethod String?     @map("payment_method")
-  
+  paymentMethod String? @map("payment_method")
+
   // Pagamentos
-  pagarmeOrderId String?   @unique @map("pagarme_order_id")
-  
+  pagarmeOrderId String? @unique @map("pagarme_order_id")
+
   // Timestamps
-  createdAt     DateTime   @default(now()) @map("created_at")
-  updatedAt     DateTime   @updatedAt @map("updated_at")
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
 
   // Relations
-  customer   User        @relation("CustomerOrders", fields: [customerId], references: [id], onDelete: Cascade)
-  trainer    User        @relation("TrainerOrders", fields: [trainerId], references: [id], onDelete: Cascade)
-  items      OrderItem[]
+  customer User        @relation("CustomerOrders", fields: [customerId], references: [id], onDelete: Cascade)
+  trainer  User        @relation("TrainerOrders", fields: [trainerId], references: [id], onDelete: Cascade)
+  items    OrderItem[]
 
   @@index([customerId])
   @@index([trainerId])
@@ -357,10 +364,10 @@ model OrderItem {
   quantity   Int    @default(1)
   unitPrice  Int    @map("unit_price") // em centavos
   totalPrice Int    @map("total_price") // em centavos
-  
+
   // Especificações do item no momento da compra
   specifications Json? // tamanho, cor, etc.
-  
+
   // Timestamps
   createdAt DateTime @default(now()) @map("created_at")
   updatedAt DateTime @updatedAt @map("updated_at")
@@ -375,18 +382,18 @@ model OrderItem {
 }
 
 model Transaction {
-  id            Int               @id @default(autoincrement())
-  userId        String?           @map("user_id") // quem fez o pagamento
-  trainerId     String?           @map("trainer_id") // quem recebeu
-  orderId       String?           @map("order_id") // ID da ordem no Pagar.me
-  transferId    String?           @map("transfer_id") // ID da transferência no Pagar.me
+  id            Int             @id @default(autoincrement())
+  userId        String?         @map("user_id") // quem fez o pagamento
+  trainerId     String?         @map("trainer_id") // quem recebeu
+  orderId       String?         @map("order_id") // ID da ordem no Pagar.me
+  transferId    String?         @map("transfer_id") // ID da transferência no Pagar.me
   amount        Int // em centavos
   type          TransactionType
   status        String?
-  paymentMethod String?           @map("payment_method") // credit_card, pix, etc
+  paymentMethod String?         @map("payment_method") // credit_card, pix, etc
   description   String?
-  createdAt     DateTime          @default(now()) @map("created_at")
-  updatedAt     DateTime          @updatedAt @map("updated_at")
+  createdAt     DateTime        @default(now()) @map("created_at")
+  updatedAt     DateTime        @updatedAt @map("updated_at")
 
   user    User? @relation("UserTransactions", fields: [userId], references: [id], onDelete: SetNull)
   trainer User? @relation("TrainerTransactions", fields: [trainerId], references: [id], onDelete: SetNull)
