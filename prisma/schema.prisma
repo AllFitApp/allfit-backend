@@ -65,6 +65,7 @@ model Profile {
   followers         Int
   rate              Float
   avatar            String
+  marketImage				String
   formation         String?
   specialty         String?
   onlineService     String?
