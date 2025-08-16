@@ -5,7 +5,7 @@ import { Request, Response } from 'express';
 const prisma = new PrismaClient();
 
 export default class CustomerController {
-	static async createCustomer({ userId }: { userId: string }) {
+	static async createCustomer({ userId }: { userId: string; }) {
 		try {
 			if (!userId) {
 				return {
@@ -291,7 +291,7 @@ export default class CustomerController {
 				orderBy: { createdAt: 'desc' },
 			});
 
-			res.json({ cards });
+			res.json(cards);
 		} catch (error: any) {
 			console.error('Erro ao buscar cartões:', error.response?.data || error.message);
 			res.status(500).json({ message: 'Erro ao buscar cartões.' });

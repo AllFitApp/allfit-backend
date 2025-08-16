@@ -216,7 +216,7 @@ export class WebhookController {
 			return transactions.reduce((total, transaction) => {
 				if (transaction.trainerId && transaction.amount > 0) {
 					// Calcular valor líquido (descontando taxa da plataforma)
-					const platformFee = Math.floor(transaction.amount * 0.1);
+					const platformFee = Math.floor(transaction.amount * 0.05);
 					return total + (transaction.amount - platformFee);
 				}
 				return total;
