@@ -6,11 +6,11 @@ const prisma = new PrismaClient();
 export default class AppointmentController {
 	static async addTrainerSchedule(req: Request, res: Response): Promise<void> {
 		try {
-			const { id, horarios } = req.body;
-			// schedule = Days[] conforme enviado do front-end
+			const { id, horarios, savedLocations, defaultLocationConfig } = req.body;
 
+			console.log(savedLocations, defaultLocationConfig);
 			if (!id || !Array.isArray(horarios)) {
-				res.status(400).json({ message: 'Trainer ID e schedule são obrigatórios' });
+				res.status(400).json({ message: 'Trainer ID e horarios são obrigatórios' });
 				return;
 			}
 
@@ -21,11 +21,20 @@ export default class AppointmentController {
 				return;
 			}
 
-			// Upsert para criar ou atualizar
+			// Prepara os dados para salvar
+			const dataToUpdate = {
+				horarios,
+				...(savedLocations && { savedLocations }),
+				...(defaultLocationConfig && { defaultLocationConfig }),
+			};
+
 			const savedSchedule = await prisma.trainerHorarios.upsert({
 				where: { trainerId: id },
-				update: { horarios },
-				create: { trainerId: id, horarios },
+				update: dataToUpdate,
+				create: {
+					trainerId: id,
+					...dataToUpdate
+				},
 			});
 
 			res.status(200).json(savedSchedule);

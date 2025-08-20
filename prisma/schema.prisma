@@ -181,11 +181,13 @@ model PostLike {
 }
 
 model TrainerHorarios {
-  id        Int      @id @default(autoincrement())
-  trainerId String   @unique
-  horarios  Json // [{ day: "monday", intervals: [{ start: 8, end: 12 }, ...] }]
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+  id                    Int      @id @default(autoincrement())
+  trainerId             String   @unique
+  horarios              Json
+  savedLocations        Json?
+  defaultLocationConfig Json?
+  createdAt             DateTime @default(now())
+  updatedAt             DateTime @updatedAt
 
   trainer User @relation(fields: [trainerId], references: [id], onDelete: Cascade)
 
