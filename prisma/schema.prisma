@@ -130,12 +130,12 @@ model RecipientInfo {
 model Appointment {
   id          Int      @id @default(autoincrement())
   trainerId   String
+	workoutId	String
+	studentId String
   studentName String
-  workoutType String
-  location    String
+  location    Json
   time        String // HH:mm - pode ser validado na camada de aplicação
   date        DateTime @db.Timestamptz(3)
-  duration    Int // em minutos
   notes       String
 
   trainer User @relation("TrainerAppointments", fields: [trainerId], references: [id])
@@ -211,16 +211,22 @@ model Wallet {
 }
 
 model SavedCard {
-  id            Int      @id @default(autoincrement())
-  userId        String   @map("user_id")
-  pagarmeCardId String   @unique @map("pagarme_card_id")
-  lastFour      String   @map("last_four")
-  brand         String
-  holderName    String   @map("holder_name")
-  type          String // credit or debit
-  isDefault     Boolean  @default(false) @map("is_default")
-  createdAt     DateTime @default(now()) @map("created_at")
-  updatedAt     DateTime @updatedAt @map("updated_at")
+  id             Int      @id @default(autoincrement())
+  userId         String   @map("user_id")
+  pagarmeCardId  String   @unique @map("pagarme_card_id")
+  lastFour       String   @map("last_four")
+  brand          String
+  holderName     String   @map("holder_name")
+  holderDocument String   @default("") @map("holder_document")
+  expMonth       Int      @default(0) @map("exp_month")
+  expYear        Int      @default(0) @map("exp_year")
+  lastFourDigits String   @default("") @map("last_four_digits")
+  firstSixDigits String   @default("") @map("first_six_digits")
+  status         String   @default("") @map("status")
+  type           String
+  isDefault      Boolean  @default(false) @map("is_default")
+  createdAt      DateTime @default(now()) @map("created_at")
+  updatedAt      DateTime @updatedAt @map("updated_at")
 
   user User @relation(fields: [userId], references: [id], onDelete: Cascade)
 

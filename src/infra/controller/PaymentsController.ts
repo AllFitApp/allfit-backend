@@ -426,7 +426,7 @@ export default class PaymentController {
 				description,
 			} = req.body;
 			const tax = 0.05; // taxa da plataforma: 10%
-
+			console.log(`studentId: ${studentId}, trainerId: ${trainerId}, workoutId: ${workoutId}, cardId: ${cardId}, paymentMethod: ${paymentMethod}`);
 			// 1) Busca detalhes da aula avulsa
 			const singleWorkout = await prisma.singleWorkout.findUnique({
 				where: { id: parseInt(workoutId) },
@@ -540,6 +540,7 @@ export default class PaymentController {
 					return;
 			}
 
+			console.log(student.pagarmeCustomerId);
 			const payload = {
 				customer_id: student.pagarmeCustomerId,
 				items: [

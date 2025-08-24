@@ -13,6 +13,6 @@ router.put('/:id', AppointmentController.update);
 router.delete('/:id', AppointmentController.delete);
 
 router.post('/horarios', AppointmentController.addTrainerSchedule);
-router.get('/horarios/:id', AppointmentController.getTrainerSchedule);
+router.get('/horarios/:trainerUsername', AppointmentController.getTrainerSchedule);
 
 export default router;

@@ -135,13 +135,17 @@ export default class PaymentController {
 					isActive: true,
 					trainer: {
 						select: {
+							id: true,
 							username: true,
 							name: true,
 							profile: {
 								select: {
 									avatar: true,
+									description: true,
 									rate: true,
-								},
+									alunos: true,
+									specialty: true,
+								}
 							},
 						},
 					},
@@ -153,10 +157,7 @@ export default class PaymentController {
 				return;
 			}
 
-			res.json({
-				...workout,
-				priceFormatted: (workout.price / 100).toFixed(2),
-			});
+			res.json(workout);
 		} catch (error: any) {
 			console.error('Erro ao buscar aula avulsa:', error.message);
 			res.status(500).json({ message: 'Erro ao buscar aula avulsa.' });

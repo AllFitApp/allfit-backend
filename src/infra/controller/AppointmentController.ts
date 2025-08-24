@@ -8,7 +8,6 @@ export default class AppointmentController {
 		try {
 			const { id, horarios, savedLocations, defaultLocationConfig } = req.body;
 
-			console.log(savedLocations, defaultLocationConfig);
 			if (!id || !Array.isArray(horarios)) {
 				res.status(400).json({ message: 'Trainer ID e horarios são obrigatórios' });
 				return;
@@ -46,10 +45,14 @@ export default class AppointmentController {
 
 	static async getTrainerSchedule(req: Request, res: Response): Promise<void> {
 		try {
-			const { id } = req.params;
+			const { trainerUsername } = req.params;
 
-			const schedule = await prisma.trainerHorarios.findUnique({
-				where: { trainerId: id },
+			const schedule = await prisma.trainerHorarios.findFirst({
+				where: {
+					trainer: {
+						username: trainerUsername
+					}
+				},
 			});
 
 			if (!schedule) {
@@ -57,12 +60,66 @@ export default class AppointmentController {
 				return;
 			}
 
-			res.status(200).json(schedule);
+			// Cast para o tipo correto
+			const horarios = (schedule.horarios as any[]) ?? [];
+			let defaultLocations: any[] = [];
+			if (
+				schedule.defaultLocationConfig &&
+				typeof schedule.defaultLocationConfig === 'object' &&
+				'locations' in schedule.defaultLocationConfig &&
+				Array.isArray((schedule.defaultLocationConfig as any).locations)
+			) {
+				defaultLocations = (schedule.defaultLocationConfig as any).locations;
+			}
+
+			const allLocations: any[] = [];
+
+			// 1. Dos horários
+			horarios.forEach((dayObj) => {
+				dayObj.intervals?.forEach((interval: any) => {
+					if (Array.isArray(interval.locations)) {
+						allLocations.push(...interval.locations);
+					}
+				});
+			});
+
+			// 2. Do defaultLocationConfig
+			if (Array.isArray(defaultLocations)) {
+				allLocations.push(...defaultLocations);
+			}
+
+			// 3. Agrupar por tipo
+			const gyms = Array.from(
+				new Map(
+					allLocations
+						.filter((loc) => loc.type === "academia")
+						.map((loc) => [loc.name, loc])
+				).values()
+			);
+
+			const domicile = allLocations.some((loc) => loc.type === "domicilio");
+
+			const others = Array.from(
+				new Map(
+					allLocations
+						.filter((loc) => !["academia", "domicilio"].includes(loc.type))
+						.map((loc) => [loc.name ?? loc.type, loc])
+				).values()
+			);
+
+			const available_locations = { gyms, domicile, others };
+
+			res.status(200).json({
+				...schedule,
+				available_locations
+			});
+
 		} catch (err) {
 			console.error('Erro ao buscar agenda do treinador:', err);
 			res.status(500).json({ message: 'Erro ao buscar agenda', err });
 		}
 	}
+
 
 	static async getAll(req: Request, res: Response): Promise<void> {
 		try {
