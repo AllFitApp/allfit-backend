@@ -128,24 +128,45 @@ model RecipientInfo {
 }
 
 model Appointment {
-  id          Int      @id @default(autoincrement())
-  trainerId   String
-	workoutId	String
-	studentId String
-  studentName String
-  location    Json
-  time        String // HH:mm - pode ser validado na camada de aplicação
-  date        DateTime @db.Timestamptz(3)
-  notes       String
+  id        Int      @id @default(autoincrement())
+  trainerId String   @map("trainer_id")
+  studentId String?  @map("student_id")
+  location  Json // Objeto location com type, name, address
+  date      DateTime @db.Timestamptz(3)
+  notes     String
 
-  trainer User @relation("TrainerAppointments", fields: [trainerId], references: [id])
+  // Status da aula
+  status      String    @default("pending") // pending, accepted, rejected, completed, cancelled, no_show
+  acceptedAt  DateTime? @map("accepted_at")
+  rejectedAt  DateTime? @map("rejected_at")
+  completedAt DateTime? @map("completed_at")
 
-  planId          String?
-  singleWorkoutId Int?
+  // Status do pagamento
+  paymentStatus String    @default("pending") // pending, paid, refunded
+  paidAt        DateTime? @map("paid_at")
 
-  plan          Plan?          @relation(fields: [planId], references: [id])
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  // Tipo de agendamento - mutuamente exclusivos
+  subscriptionId  String? @map("subscription_id") // Para agendamentos via assinatura
+  singleWorkoutId Int?    @map("single_workout_id") // Para agendamentos de aula avulsa
+
+  trainer User @relation("TrainerAppointments", fields: [trainerId], references: [id], onDelete: Cascade)
+
+  // Relacionamentos baseados no tipo de agendamento
+  subscription  Subscription?  @relation(fields: [subscriptionId], references: [id])
   singleWorkout SingleWorkout? @relation(fields: [singleWorkoutId], references: [id])
+  Plan          Plan?          @relation(fields: [planId], references: [id])
+  planId        String?
 
+  @@index([trainerId])
+  @@index([date])
+  @@index([studentId])
+  @@index([subscriptionId])
+  @@index([singleWorkoutId])
+  @@index([status]) // Índice para filtrar por status da aula
+  @@index([paymentStatus]) // Índice para filtrar por status do pagamento
   @@map("appointments")
 }
 
@@ -268,6 +289,7 @@ model Subscription {
   endDate               DateTime?          @map("end_date")
   createdAt             DateTime           @default(now()) @map("created_at")
   updatedAt             DateTime           @updatedAt @map("updated_at")
+  appointments          Appointment[] // <- APENAS ESTA LINHA NOVA
 
   user    User @relation("UserSubscriptions", fields: [userId], references: [id], onDelete: Cascade)
   trainer User @relation("TrainerSubscriptions", fields: [trainerId], references: [id], onDelete: Cascade)
@@ -285,9 +307,9 @@ model SingleWorkout {
   trainerId       String   @map("trainer_id")
   name            String
   description     String?
-  category        String? // Nova coluna para categorizar as aulas
+  category        String?
   price           Int
-  duration        Int? // Duração em minutos (opcional)
+  duration        Int? // Duração em minutos
   isActive        Boolean  @default(true) @map("is_active")
   createdAt       DateTime @default(now()) @map("created_at")
   updatedAt       DateTime @updatedAt @map("updated_at")

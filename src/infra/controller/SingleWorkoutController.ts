@@ -9,10 +9,11 @@ export default class PaymentController {
 		 */
 	static async createSingleWorkout(req: Request, res: Response) {
 		try {
-			const { userId, name, description, price, category, duration, maxParticipants } = req.body;
+			const { userId, name, description, price, category, duration, isFree } = req.body;
 
-			if (!userId || !name || !description || !price) {
+			if (!userId || !name || !description) {
 				res.status(400).json({ message: 'Todos os campos obrigatórios devem estar preenchidos.' });
+				console.log('Campos: ', userId, name, description, price);
 				return;
 			}
 
@@ -29,7 +30,7 @@ export default class PaymentController {
 
 			const priceInCents = Math.floor(Number(price) * 100);
 
-			if (priceInCents <= 1000) {
+			if (priceInCents <= 1000 && !isFree) {
 				res.status(400).json({ message: 'O valor da aula avulsa deve ser maior que R$ 10,00.' });
 				return;
 			}
