@@ -33,6 +33,8 @@ model User {
   trainerHorarios     TrainerHorarios?
   trainerAppointments Appointment[]    @relation("TrainerAppointments")
 
+  studentAppointments Appointment[] @relation("StudentAppointments")
+
   transactions        Transaction[] @relation("UserTransactions")
   trainerTransactions Transaction[] @relation("TrainerTransactions")
 
@@ -41,6 +43,11 @@ model User {
 
   orders        Order[] @relation("CustomerOrders")
   trainerOrders Order[] @relation("TrainerOrders")
+
+  createdWorkouts    WorkoutSession[] @relation("TrainerWorkouts")
+  createdExercises   Exercise[]       @relation("TrainerExercises")
+  weeklyPlans        WeeklyPlan[]     @relation("StudentWeeklyPlans")
+  trainerWeeklyPlans WeeklyPlan[]     @relation("TrainerWeeklyPlans")
 
   @@map("users")
 }
@@ -130,7 +137,7 @@ model RecipientInfo {
 model Appointment {
   id        Int      @id @default(autoincrement())
   trainerId String   @map("trainer_id")
-  studentId String?  @map("student_id")
+  studentId String   @map("student_id")
   location  Json // Objeto location com type, name, address
   date      DateTime @db.Timestamptz(3)
   notes     String
@@ -148,25 +155,26 @@ model Appointment {
   createdAt DateTime @default(now()) @map("created_at")
   updatedAt DateTime @updatedAt @map("updated_at")
 
-  // Tipo de agendamento - mutuamente exclusivos
-  subscriptionId  String? @map("subscription_id") // Para agendamentos via assinatura
-  singleWorkoutId Int?    @map("single_workout_id") // Para agendamentos de aula avulsa
+  subscriptionId   String? @map("subscription_id")
+  singleWorkoutId  Int?    @map("single_workout_id")
+  planId           String?
+  workoutSessionId String? @map("workout_session_id")
 
-  trainer User @relation("TrainerAppointments", fields: [trainerId], references: [id], onDelete: Cascade)
-
-  // Relacionamentos baseados no tipo de agendamento
-  subscription  Subscription?  @relation(fields: [subscriptionId], references: [id])
-  singleWorkout SingleWorkout? @relation(fields: [singleWorkoutId], references: [id])
-  Plan          Plan?          @relation(fields: [planId], references: [id])
-  planId        String?
+  trainer        User            @relation("TrainerAppointments", fields: [trainerId], references: [id], onDelete: Cascade)
+  student        User            @relation("StudentAppointments", fields: [studentId], references: [id], onDelete: Cascade)
+  subscription   Subscription?   @relation(fields: [subscriptionId], references: [id])
+  singleWorkout  SingleWorkout?  @relation(fields: [singleWorkoutId], references: [id])
+  plan           Plan?           @relation(fields: [planId], references: [id])
+  workoutSession WorkoutSession?
 
   @@index([trainerId])
   @@index([date])
   @@index([studentId])
   @@index([subscriptionId])
   @@index([singleWorkoutId])
-  @@index([status]) // Índice para filtrar por status da aula
-  @@index([paymentStatus]) // Índice para filtrar por status do pagamento
+  @@index([workoutSessionId])
+  @@index([status])
+  @@index([paymentStatus])
   @@map("appointments")
 }
 
@@ -195,7 +203,7 @@ model PostLike {
   user User @relation(fields: [userId], references: [id], onDelete: Cascade)
   post Post @relation(fields: [postId], references: [id], onDelete: Cascade)
 
-  @@unique([userId, postId]) // cada user pode curtir 1x
+  @@unique([userId, postId])
   @@index([postId])
   @@index([userId])
   @@map("post_likes")
@@ -215,13 +223,93 @@ model TrainerHorarios {
   @@map("trainer_horarios")
 }
 
+// === SISTEMA DE TREINOS ===
+
+model Exercise {
+  id          String   @id @default(uuid())
+  trainerId   String   @map("trainer_id")
+  name        String
+  description String?
+  series      Int
+  rest        Int
+  weight      Float?
+  type        String?
+  reps        Int?
+  timing      Int?
+  createdAt   DateTime @default(now()) @map("created_at")
+  updatedAt   DateTime @updatedAt @map("updated_at")
+  isCopy      Boolean? @map("is_copy")
+
+  trainer User @relation("TrainerExercises", fields: [trainerId], references: [id], onDelete: NoAction)
+
+  workoutSessions WorkoutSession[] @relation("WorkoutExercises")
+
+  @@index([trainerId])
+  @@index([type])
+  @@map("exercises")
+}
+
+model WorkoutSession {
+  id          String   @id @default(uuid())
+  trainerId   String   @map("trainer_id")
+  name        String
+  description String?
+  type        String?
+  dayOfWeek   Int?     @map("day_of_week") // 1- segunda, 2 - terça...
+  defaultRest Int?     @map("rest_between_exercises")
+  order       Int?
+  createdAt   DateTime @default(now()) @map("created_at")
+  updatedAt   DateTime @updatedAt @map("updated_at")
+  isCopy      Boolean? @map("is_copy")
+
+  // Relações opcionais - uma sessão pode estar vinculada a um appointment OU a um plano semanal
+  appointmentId Int?    @unique @map("appointment_id")
+  weeklyPlanId  String? @map("weekly_plan_id")
+
+  trainer     User         @relation("TrainerWorkouts", fields: [trainerId], references: [id], onDelete: Cascade)
+  exercises   Exercise[]   @relation("WorkoutExercises")
+  appointment Appointment? @relation(fields: [appointmentId], references: [id])
+  weeklyPlan  WeeklyPlan?  @relation(fields: [weeklyPlanId], references: [id])
+
+  @@index([trainerId])
+  @@index([type])
+  @@index([appointmentId])
+  @@index([weeklyPlanId])
+  @@map("workouts")
+}
+
+model WeeklyPlan {
+  id          String    @id @default(uuid())
+  trainerId   String    @map("trainer_id")
+  studentId   String?   @map("student_id")
+  name        String
+  description String?
+  startDate   DateTime  @map("start_date")
+  endDate     DateTime? @map("end_date")
+  isActive    Boolean   @default(true) @map("is_active")
+  createdAt   DateTime  @default(now()) @map("created_at")
+  updatedAt   DateTime  @updatedAt @map("updated_at")
+  isCopy      Boolean?  @map("is_copy")
+
+  trainer User  @relation("TrainerWeeklyPlans", fields: [trainerId], references: [id], onDelete: Cascade)
+  student User? @relation("StudentWeeklyPlans", fields: [studentId], references: [id], onDelete: Cascade)
+
+  // Relação one-to-many com WorkoutSession
+  workouts WorkoutSession[]
+
+  @@index([trainerId, studentId])
+  @@index([studentId, isActive])
+  @@index([startDate, endDate])
+  @@map("weekly_plans")
+}
+
 // === SISTEMA DE PAGAMENTOS ===
 
 model Wallet {
   id              Int      @id @default(autoincrement())
   userId          String   @unique @map("user_id")
   pagarmeWalletId String?  @unique @map("pagarme_wallet_id")
-  balance         Int      @default(0) // em centavos
+  balance         Int      @default(0)
   lastSynced      DateTime @default(now()) @map("last_synced")
   createdAt       DateTime @default(now()) @map("created_at")
   updatedAt       DateTime @updatedAt @map("updated_at")
@@ -271,7 +359,7 @@ model Plan {
 
   trainer       User           @relation(fields: [trainerId], references: [id], onDelete: Cascade)
   subscriptions Subscription[]
-  Appointment   Appointment[]
+  appointments  Appointment[]
 
   @@index([trainerUsername, isActive, trainerId])
   @@map("plans")
@@ -289,7 +377,7 @@ model Subscription {
   endDate               DateTime?          @map("end_date")
   createdAt             DateTime           @default(now()) @map("created_at")
   updatedAt             DateTime           @updatedAt @map("updated_at")
-  appointments          Appointment[] // <- APENAS ESTA LINHA NOVA
+  appointments          Appointment[]
 
   user    User @relation("UserSubscriptions", fields: [userId], references: [id], onDelete: Cascade)
   trainer User @relation("TrainerSubscriptions", fields: [trainerId], references: [id], onDelete: Cascade)
@@ -309,7 +397,7 @@ model SingleWorkout {
   description     String?
   category        String?
   price           Int
-  duration        Int? // Duração em minutos
+  duration        Int?
   isActive        Boolean  @default(true) @map("is_active")
   createdAt       DateTime @default(now()) @map("created_at")
   updatedAt       DateTime @updatedAt @map("updated_at")
@@ -324,26 +412,17 @@ model SingleWorkout {
 }
 
 model Order {
-  id          String @id @default(uuid())
-  customerId  String @map("customer_id")
-  trainerId   String @map("trainer_id")
-  orderNumber String @unique @map("order_number") // Número sequencial amigável
+  id             String   @id @default(uuid())
+  customerId     String   @map("customer_id")
+  trainerId      String   @map("trainer_id")
+  orderNumber    String   @unique @map("order_number")
+  totalAmount    Int      @map("total_amount")
+  status         String
+  paymentMethod  String?  @map("payment_method")
+  pagarmeOrderId String?  @unique @map("pagarme_order_id")
+  createdAt      DateTime @default(now()) @map("created_at")
+  updatedAt      DateTime @updatedAt @map("updated_at")
 
-  // Total
-  totalAmount Int @map("total_amount") // em centavos
-
-  // Status e pagamento
-  status        String
-  paymentMethod String? @map("payment_method")
-
-  // Pagamentos
-  pagarmeOrderId String? @unique @map("pagarme_order_id")
-
-  // Timestamps
-  createdAt DateTime @default(now()) @map("created_at")
-  updatedAt DateTime @updatedAt @map("updated_at")
-
-  // Relations
   customer User @relation("CustomerOrders", fields: [customerId], references: [id], onDelete: Cascade)
   trainer  User @relation("TrainerOrders", fields: [trainerId], references: [id], onDelete: Cascade)
 
@@ -363,7 +442,7 @@ model Transaction {
   amount        Int // em centavos
   type          TransactionType
   status        String?
-  paymentMethod String?         @map("payment_method") // credit_card, pix, etc
+  paymentMethod String?         @map("payment_method")
   description   String?
   createdAt     DateTime        @default(now()) @map("created_at")
   updatedAt     DateTime        @updatedAt @map("updated_at")
@@ -399,8 +478,8 @@ enum TransactionType {
 }
 
 enum SubscriptionStatus {
-  ACTIVE // ativa
-  CANCELLED // cancelada
-  EXPIRED // expirada
-  SUSPENDED // suspensa
+  ACTIVE
+  CANCELLED
+  EXPIRED
+  SUSPENDED
 }
