@@ -210,9 +210,7 @@ export default class AppointmentController {
 					singleWorkout: {
 						select: { id: true, name: true, price: true, duration: true, }
 					},
-					workoutSession: {
-						omit: { id: true }
-					}
+					workoutSession: true
 				}
 			});
 
