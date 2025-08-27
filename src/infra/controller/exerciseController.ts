@@ -15,11 +15,11 @@ export class ExerciseController {
 					name,
 					description,
 					series,
-					reps,
+					reps: reps ? Number(reps) : null,
 					rest,
-					weight,
+					weight: weight ? Number(weight) : null,
 					type,
-					timing,
+					timing: timing ? Number(timing) : null,
 				}
 			});
 
@@ -36,7 +36,7 @@ export class ExerciseController {
 			const { trainerId } = req.params;
 
 			const exercises = await prisma.exercise.findMany({
-				where: { trainerId }
+				where: { trainerId, isCopy: null }
 			});
 
 			res.json(exercises);

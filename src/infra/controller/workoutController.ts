@@ -95,6 +95,71 @@ export class WorkoutController {
 		}
 	}
 	/**
+	 * Listar sessões de treino
+	 */
+	static async getWorkoutSession(req: Request, res: Response) {
+		const { id } = req.params;
+
+		try {
+			const sessions = await prisma.workoutSession.findFirst({
+				where: {
+					OR: [
+						{ id },
+						{ appointmentId: id },
+					],
+					isCopy: true
+				},
+				include: { exercises: true }
+			});
+
+			res.json(sessions);
+		} catch (error) {
+			console.error(error);
+			res.status(500).json({ error: 'Erro ao buscar sessões de treino' });
+		}
+	}
+	static async getWorkoutSessionsByWeeklyPlan(req: Request, res: Response) {
+		const { id } = req.params;
+
+		try {
+			const sessions = await prisma.workoutSession.findMany({
+				where: {
+
+					weeklyPlanId: id
+					,
+					isCopy: true
+				},
+				include: { exercises: true }
+			});
+
+			res.json(sessions);
+		} catch (error) {
+			console.error(error);
+			res.status(500).json({ error: 'Erro ao buscar sessões de treino' });
+		}
+	}
+	/**
+	 * Listar sessões de treino de treinadores
+	 */
+	static async getWorkoutSessionsByTrainer(req: Request, res: Response) {
+		const { trainerId } = req.params;
+		console.log(trainerId);
+		try {
+			const sessions = await prisma.workoutSession.findMany({
+				where: {
+					trainerId,
+					isCopy: null
+				},
+				include: { exercises: true }
+			});
+
+			res.json(sessions);
+		} catch (error) {
+			console.error(error);
+			res.status(500).json({ error: 'Erro ao buscar sessões de treino' });
+		}
+	}
+	/**
 	 * Lista planos semanais criados pelo treinador (busca sem a flag de copy)
 	 */
 	static async getWeeklyPlansByTrainer(req: Request, res: Response) {
@@ -182,6 +247,51 @@ export class WorkoutController {
 				include: { workouts: { include: { exercises: true } } }
 			});
 			res.json(plan);
+		} catch (error) {
+			console.error(error);
+			res.status(500).json({ error: 'Erro ao atribuir plano ao aluno' });
+		}
+	}
+	/**
+	 * Atribuir sessão a agendamento. O workoutSession previamente criado pelo treinador, será copiado para o aluno
+	 */
+	static async assignSessionToAppointment(req: Request, res: Response) {
+		try {
+			const { sessionId, appointmentId } = req.body;
+
+			const workoutSession = await prisma.workoutSession.findUnique({
+				where: { id: sessionId },
+				include: {
+					exercises: true
+				}
+			});
+
+			if (!workoutSession) {
+				return res.status(404).json({ error: 'treino nao encontrado' });
+			}
+
+			const session = await prisma.workoutSession.create({
+				data: {
+					appointmentId,
+					trainerId: workoutSession?.trainerId,
+					name: workoutSession?.name || '',
+					description: workoutSession?.description,
+					type: workoutSession?.type,
+					defaultRest: workoutSession?.defaultRest,
+					isCopy: true,
+					exercises: {
+						create: workoutSession?.exercises.map((e: Exercise) => {
+							const { id, ...rest } = e;
+							return {
+								...rest,
+								isCopy: true
+							};
+						})
+					}
+				},
+				include: { exercises: true }
+			});
+			res.json(session);
 		} catch (error) {
 			console.error(error);
 			res.status(500).json({ error: 'Erro ao atribuir plano ao aluno' });
