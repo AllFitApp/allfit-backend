@@ -148,7 +148,7 @@ export default class AppointmentController {
 			const { id } = req.params;
 
 			const appointment = await prisma.appointment.findUnique({
-				where: { id: Number(id) },
+				where: { id },
 				include: {
 					trainer: {
 						select: { id: true, name: true, username: true }
@@ -299,7 +299,7 @@ export default class AppointmentController {
 			const data = req.body;
 
 			const appointment = await prisma.appointment.findUnique({
-				where: { id: Number(id) },
+				where: { id },
 			});
 
 			if (!appointment) {
@@ -308,7 +308,7 @@ export default class AppointmentController {
 			}
 
 			const updated = await prisma.appointment.update({
-				where: { id: Number(id) },
+				where: { id },
 				data,
 				include: {
 					trainer: {
@@ -334,7 +334,7 @@ export default class AppointmentController {
 			const { id } = req.params;
 
 			await prisma.appointment.delete({
-				where: { id: Number(id) },
+				where: { id },
 			});
 
 			res.status(204).send();
@@ -350,7 +350,7 @@ export default class AppointmentController {
 			const { trainerId } = req.body;
 
 			const appointment = await prisma.appointment.findUnique({
-				where: { id: Number(id) }
+				where: { id: id }
 			});
 
 			if (!appointment) {
@@ -371,7 +371,7 @@ export default class AppointmentController {
 			}
 
 			const updated = await prisma.appointment.update({
-				where: { id: Number(id) },
+				where: { id },
 				data: {
 					status: 'accepted',
 					acceptedAt: new Date()
@@ -401,7 +401,7 @@ export default class AppointmentController {
 			const { trainerId, rejectionReason } = req.body;
 
 			const appointment = await prisma.appointment.findUnique({
-				where: { id: Number(id) }
+				where: { id }
 			});
 
 			if (!appointment) {
@@ -422,7 +422,7 @@ export default class AppointmentController {
 			}
 
 			const updated = await prisma.appointment.update({
-				where: { id: Number(id) },
+				where: { id },
 				data: {
 					status: 'rejected',
 					rejectedAt: new Date(),
@@ -453,7 +453,7 @@ export default class AppointmentController {
 			const { id } = req.params;
 
 			const appointment = await prisma.appointment.findUnique({
-				where: { id: Number(id) },
+				where: { id },
 			});
 
 			if (!appointment) {
@@ -468,7 +468,7 @@ export default class AppointmentController {
 			}
 
 			const updated = await prisma.appointment.update({
-				where: { id: Number(id) },
+				where: { id },
 				data: {
 					status: 'completed',
 					completedAt: new Date()
@@ -497,7 +497,7 @@ export default class AppointmentController {
 			const { id } = req.params;
 
 			const appointment = await prisma.appointment.findUnique({
-				where: { id: Number(id) },
+				where: { id },
 			});
 
 			if (!appointment) {
@@ -506,7 +506,7 @@ export default class AppointmentController {
 			}
 
 			const updated = await prisma.appointment.update({
-				where: { id: Number(id) },
+				where: { id },
 				data: {
 					paymentStatus: 'paid',
 					paidAt: new Date()

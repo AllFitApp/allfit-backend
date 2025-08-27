@@ -135,7 +135,7 @@ model RecipientInfo {
 }
 
 model Appointment {
-  id        Int      @id @default(autoincrement())
+  id        String   @id @default(uuid())
   trainerId String   @map("trainer_id")
   studentId String   @map("student_id")
   location  Json // Objeto location com type, name, address
@@ -263,7 +263,7 @@ model WorkoutSession {
   isCopy      Boolean? @map("is_copy")
 
   // Relações opcionais - uma sessão pode estar vinculada a um appointment OU a um plano semanal
-  appointmentId Int?    @unique @map("appointment_id")
+  appointmentId String? @unique @map("appointment_id")
   weeklyPlanId  String? @map("weekly_plan_id")
 
   trainer     User         @relation("TrainerWorkouts", fields: [trainerId], references: [id], onDelete: Cascade)
