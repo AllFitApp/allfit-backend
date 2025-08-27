@@ -1094,7 +1094,7 @@ export default class RecipientController {
 	/**
 	 * Calcula o valor líquido que o treinador recebe (descontando taxa da plataforma)
 	 */
-	static calculateTrainerAmount(grossAmount: number, platformTaxRate: number = 0.1): number {
+	static calculateTrainerAmount(grossAmount: number, platformTaxRate: number = 0.05): number {
 		const platformFee = Math.floor(grossAmount * platformTaxRate);
 		return grossAmount - platformFee;
 	}

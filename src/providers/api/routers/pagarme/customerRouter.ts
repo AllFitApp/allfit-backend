@@ -18,5 +18,6 @@ customerRouter.put('/:userId', CustomerController.updateCustomer);
 
 customerRouter.post('/:userId/cards', CustomerController.saveCard); // Adiciona um cartão para um usuário
 customerRouter.get('/:userId/cards', CustomerController.getSavedCards); // Lista cartões do usuário
+customerRouter.get('/:userId/cards/sync', CustomerController.syncSavedCards); // Lista cartões do usuário
 
 export default customerRouter;

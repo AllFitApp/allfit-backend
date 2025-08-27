@@ -24,7 +24,7 @@ export default class PaymentController {
 	static async createMonthlyModel(req: Request, res: Response) {
 		try {
 			const { userId, name, description, price, features } = req.body;
-		const user = await prisma.user.findUnique({
+			const user = await prisma.user.findUnique({
 				where: { id: userId },
 				select: { role: true, username: true, wallet: { select: { pagarmeWalletId: true } } },
 			});
@@ -45,7 +45,7 @@ export default class PaymentController {
 				res.status(400).json({ message: 'O valor do plano deve ser maior que R$ 10,00.' });
 				return;
 			}
-		
+
 			const payload = {
 				interval: 'month',
 				interval_count: 1,
@@ -84,7 +84,7 @@ export default class PaymentController {
 					features,
 					isActive: true,
 				},
-			});			
+			});
 
 			res.status(201).json({
 				message: 'Plano criado com sucesso',
@@ -201,7 +201,7 @@ export default class PaymentController {
 			}
 
 			const amount = plan.price;
-			const platformFee = Math.floor(amount * 0.1); // 10% para plataforma
+			const platformFee = Math.floor(amount * 0.05); // 10% para plataforma
 			const trainerAmount = amount - platformFee;
 
 			// Cria assinatura no Pagar.me V5
@@ -412,164 +412,46 @@ export default class PaymentController {
 			res.status(500).json({ message: 'Erro ao excluir assinatura.' });
 		}
 	}
-
-	// ==== Aulas avulsas ====
 	/**
-	 * Definir aulas avulsas
-	 */
-	static async createSingleWorkoutModel(req: Request, res: Response) {
-		try {
-			const { userId, name, description, price } = req.body;
-			if (!userId || !name || !description || !price) {
-				res.status(400).json({ message: 'Todos os campos obrigatórios devem estar preenchidos.' });
-				return;
-			}
-			// Valida treinador
-			const user = await prisma.user.findUnique({
-				where: { id: userId },
-				select: { role: true, username: true },
-			});
-
-			if (!user || user.role !== 'TRAINER') {
-				res.status(400).json({ message: 'Usuário deve ser um treinador.' });
-				return;
-			}
-
-			const priceInCents = Math.floor(Number(price) * 100);
-			console.log(priceInCents);
-			if (priceInCents <= 1000) {
-				res.status(400).json({ message: 'O valor da aula avulsa deve ser maior que R$ 10,00.' });
-				return;
-			}
-
-			const workout = await prisma.singleWorkout.upsert({
-				where: { trainerId: userId },
-				create: {
-					trainerId: userId,
-					trainerUsername: user.username,
-					name,
-					description,
-					price: priceInCents,
-				},
-				update: {
-					name,
-					description,
-					price: priceInCents,
-				},
-			});
-
-			res.status(201).json({
-				message: 'Aula avulsa criada com sucesso.',
-				workout,
-				priceFormatted: (workout.price / 100).toFixed(2),
-			});
-		} catch (error: any) {
-			console.error('Erro ao criar aula avulsa:', error.message);
-			res.status(500).json({ message: 'Erro ao criar aula avulsa.' });
-		}
-	}
-	/**
-	 * Atualizar aula avulsa
-	 */
-	static async updateSingleWorkout(req: Request, res: Response) {
-		try {
-			const { workoutId } = req.params;
-			const { name, description, price, isActive } = req.body;
-
-			const existing = await prisma.singleWorkout.findUnique({
-				where: { id: Number(workoutId) },
-			});
-
-			if (!existing) {
-				res.status(404).json({ message: 'Aula avulsa não encontrada.' });
-				return;
-			}
-
-			const updated = await prisma.singleWorkout.update({
-				where: { id: Number(workoutId) },
-				data: {
-					name,
-					description,
-					price: typeof price === 'number' ? Math.floor(price * 100) : undefined,
-					isActive,
-				},
-			});
-
-			res.json({
-				message: 'Aula avulsa atualizada com sucesso.',
-				workout: updated,
-				priceFormatted: (updated.price / 100).toFixed(2),
-			});
-		} catch (error: any) {
-			console.error('Erro ao atualizar aula avulsa:', error.message);
-			res.status(500).json({ message: 'Erro ao atualizar aula avulsa.' });
-		}
-	}
-	/**
-	 * Buscar aula avulsa
-	 */
-	static async getSingleWorkout(req: Request, res: Response) {
-		try {
-			const { username } = req.params;
-			console.log(username);
-			const existing = await prisma.singleWorkout.findFirst({
-				where: { trainerUsername: username },
-
-				select: {
-					id: true,
-					name: true,
-					description: true,
-					price: true,
-				},
-			});
-
-			if (!existing) {
-				res.status(404).json({ message: 'Aula avulsa não encontrada.' });
-				return;
-			}
-
-			res.json(existing);
-		} catch (error: any) {
-			console.error('Erro ao atualizar aula avulsa:', error.message);
-			res.status(500).json({ message: 'Erro ao atualizar aula avulsa.' });
-		}
-	}
-	/**
-	 * Definir aulas avulsas
-	 */
-	static async deleteSingleWorkout(req: Request, res: Response) {
-		try {
-			const { userId } = req.body;
-			await prisma.singleWorkout.delete({ where: { trainerId: userId } });
-			res.json({ message: 'Aula avulsa excluida com sucesso.' });
-		} catch (error: any) {
-			console.error('Erro ao excluir aula avulsa:', error.message);
-			res.status(500).json({ message: 'Erro ao excluir aula avulsa.' });
-		}
-	}
-	/**
-	 * Pagamento de aula avulsa (payOneTimeWorkout)
-	 * Do valor da aula será deduzido a taxa da plataforma
+	 * Pagamento de aula avulsa (atualizado)
 	 */
 	static async paySingleWorkout(req: Request, res: Response) {
 		try {
 			const {
 				studentId,
 				trainerId,
-				classId,
+				workoutId,
 				cardId,
-				paymentMethod = 'credit_card', // valor padrão
+				paymentMethod = 'credit_card',
 				description,
 			} = req.body;
-			const tax = 0.1; // taxa da plataforma: 10%
-
+			const tax = 0.05; // taxa da plataforma: 10%
+			console.log(`studentId: ${studentId}, trainerId: ${trainerId}, workoutId: ${workoutId}, cardId: ${cardId}, paymentMethod: ${paymentMethod}`);
 			// 1) Busca detalhes da aula avulsa
-			const singleClass = await prisma.singleWorkout.findUnique({
-				where: { id: Number(classId) },
-				select: { price: true, id: true },
+			const singleWorkout = await prisma.singleWorkout.findUnique({
+				where: { id: parseInt(workoutId) },
+				select: {
+					price: true,
+					id: true,
+					name: true,
+					trainerId: true,
+					isActive: true
+				},
 			});
-			if (!singleClass) {
+
+			if (!singleWorkout) {
 				res.status(404).json({ message: 'Aula avulsa não encontrada.' });
+				return;
+			}
+
+			if (!singleWorkout.isActive) {
+				res.status(400).json({ message: 'Esta aula avulsa não está disponível.' });
+				return;
+			}
+
+			// Verifica se o treinador da aula corresponde ao informado
+			if (singleWorkout.trainerId !== trainerId) {
+				res.status(400).json({ message: 'Treinador não corresponde à aula selecionada.' });
 				return;
 			}
 
@@ -597,15 +479,23 @@ export default class PaymentController {
 				return;
 			}
 
-			// 4) Verifica cartão salvo
-			const savedCard = await prisma.savedCard.findUnique({ where: { id: Number(cardId) } });
-			if (!savedCard || savedCard.userId !== studentId) {
-				res.status(404).json({ message: 'Cartão não encontrado.' });
-				return;
+			// 4) Verifica cartão salvo (se necessário)
+			let savedCard = null;
+			if (['credit_card', 'debit_card'].includes(paymentMethod)) {
+				if (!cardId) {
+					res.status(400).json({ message: 'É necessário fornecer um cartão salvo.' });
+					return;
+				}
+
+				savedCard = await prisma.savedCard.findUnique({ where: { id: parseInt(cardId) } });
+				if (!savedCard || savedCard.userId !== studentId) {
+					res.status(404).json({ message: 'Cartão não encontrado.' });
+					return;
+				}
 			}
 
-			// 5) Calcula valores (valor da aula, taxa da plataforma, valor do treinador)
-			const amount = singleClass.price;
+			// 5) Calcula valores
+			const amount = singleWorkout.price;
 			const platformFee = Math.floor(amount * tax);
 			const trainerAmount = amount - platformFee;
 
@@ -613,20 +503,6 @@ export default class PaymentController {
 
 			switch (paymentMethod) {
 				case 'credit_card': {
-					console.log('tipo credit_card');
-					if (!cardId) {
-						console.log('Moiô');
-						res.status(400).json({ message: 'É necessário fornecer um cartão salvo.' });
-
-						return;
-					}
-
-					const savedCard = await prisma.savedCard.findUnique({ where: { id: Number(cardId) } });
-					if (!savedCard || savedCard.userId !== studentId) {
-						res.status(404).json({ message: 'Cartão não encontrado.' });
-						return;
-					}
-
 					payments = [
 						{
 							payment_method: 'credit_card',
@@ -634,13 +510,12 @@ export default class PaymentController {
 								recurrence: false,
 								installments: 1,
 								statement_descriptor: 'ALLFIT',
-								card_id: savedCard.pagarmeCardId,
+								card_id: savedCard!.pagarmeCardId,
 							},
 						},
 					];
 					break;
 				}
-
 				case 'pix': {
 					payments = [
 						{
@@ -649,42 +524,30 @@ export default class PaymentController {
 					];
 					break;
 				}
-
 				case 'debit_card': {
-					if (!cardId) {
-						res.status(400).json({ message: 'É necessário fornecer um cartão salvo.' });
-						return;
-					}
-
-					const savedCard = await prisma.savedCard.findUnique({ where: { id: Number(cardId) } });
-					if (!savedCard || savedCard.userId !== studentId) {
-						res.status(404).json({ message: 'Cartão não encontrado.' });
-						return;
-					}
-
 					payments = [
 						{
 							payment_method: 'debit_card',
 							debit_card: {
-								card_id: savedCard.pagarmeCardId,
+								card_id: savedCard!.pagarmeCardId,
 							},
 						},
 					];
 					break;
 				}
-
 				default:
 					res.status(400).json({ message: 'Método de pagamento inválido.' });
 					return;
 			}
 
+			console.log(student.pagarmeCustomerId);
 			const payload = {
 				customer_id: student.pagarmeCustomerId,
 				items: [
 					{
-						code: singleClass.id.toString(),
+						code: singleWorkout.id.toString(),
 						amount: amount,
-						description: description,
+						description: description || `Aula avulsa: ${singleWorkout.name}`,
 						quantity: 1,
 					},
 				],
@@ -692,18 +555,18 @@ export default class PaymentController {
 				split: [
 					{
 						recipient_id: trainer.wallet.pagarmeWalletId,
-						amount: trainerAmount, // valor líquido do treinador (ex: 9000)
+						amount: trainerAmount,
 						type: 'flat',
 					},
 					{
-						recipient_id: process.env.PLATAFORMA_WALLET_ID!, // substitua pelo seu ID fixo
-						amount: platformFee, // valor da taxa da plataforma (ex: 1000)
+						recipient_id: process.env.PLATAFORMA_WALLET_ID!,
+						amount: platformFee,
 						type: 'flat',
 					},
 				],
 			};
 
-			const { data: order, status, statusText } = await pagarmeApi.post('/orders', payload);
+			const { data: order } = await pagarmeApi.post('/orders', payload);
 
 			console.log('last_transaction:', JSON.stringify(order?.charges?.[0]?.last_transaction, null, 2));
 
@@ -717,7 +580,7 @@ export default class PaymentController {
 					type: 'PAYMENT',
 					status: order.status,
 					paymentMethod,
-					description,
+					description: description || `Aula avulsa: ${singleWorkout.name}`,
 				},
 			});
 
@@ -726,18 +589,22 @@ export default class PaymentController {
 					where: { userId: trainerId },
 					data: {
 						balance: {
-							increment: trainerAmount
-						}
-					}
-				});
-				res.status(200).json({
-					message: 'Pagamento processado',
-					order: { id: order.id, status: order.status, amount: order.amount },
+							increment: trainerAmount,
+						},
+					},
 				});
 			}
+
+			res.status(200).json({
+				message: 'Pagamento processado',
+				order: { id: order.id, status: order.status, amount: order.amount },
+				workout: {
+					id: singleWorkout.id,
+					name: singleWorkout.name,
+				},
+			});
 		} catch (error: any) {
 			console.error('Erro no pagamento:', error.response?.data || error.message);
-			console.log('Erro geral: ', error);
 			res.status(500).json({ message: 'Falha no pagamento avulso.' });
 			return;
 		}

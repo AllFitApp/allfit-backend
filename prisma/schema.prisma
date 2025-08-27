@@ -21,33 +21,33 @@ model User {
 
   pagarmeCustomerId String? @unique @map("pagarme_customer_id")
 
-  // Relations
-  profile       Profile?
-  likes         PostLike[]
-  wallet        Wallet?
-  savedCards    SavedCard[]
-  plans         Plan[]
-  singleWorkout SingleWorkout?
-  recipientInfo RecipientInfo?
-  addresses     Address?
+  profile        Profile?
+  likes          PostLike[]
+  wallet         Wallet?
+  savedCards     SavedCard[]
+  plans          Plan[]
+  singleWorkouts SingleWorkout[] // Agora um treinador pode ter múltiplas aulas avulsas
+  recipientInfo  RecipientInfo?
+  addresses      Address?
 
-  // Appointments
-  trainerAppointments Appointment[] @relation("TrainerAppointments")
+  trainerHorarios     TrainerHorarios?
+  trainerAppointments Appointment[]    @relation("TrainerAppointments")
 
-  // Transactions
+  studentAppointments Appointment[] @relation("StudentAppointments")
+
   transactions        Transaction[] @relation("UserTransactions")
   trainerTransactions Transaction[] @relation("TrainerTransactions")
 
-  // Subscriptions
   subscriptions        Subscription[] @relation("UserSubscriptions")
   trainerSubscriptions Subscription[] @relation("TrainerSubscriptions")
 
-  // Mini Store - Produtos
-  products Product[] @relation("TrainerProducts")
-  
-  // Orders - Pedidos como comprador e vendedor
   orders        Order[] @relation("CustomerOrders")
   trainerOrders Order[] @relation("TrainerOrders")
+
+  createdWorkouts    WorkoutSession[] @relation("TrainerWorkouts")
+  createdExercises   Exercise[]       @relation("TrainerExercises")
+  weeklyPlans        WeeklyPlan[]     @relation("StudentWeeklyPlans")
+  trainerWeeklyPlans WeeklyPlan[]     @relation("TrainerWeeklyPlans")
 
   @@map("users")
 }
@@ -65,7 +65,7 @@ model Profile {
   followers         Int
   rate              Float
   avatar            String
-  marketImage				String
+  marketImage       String?
   formation         String?
   specialty         String?
   onlineService     String?
@@ -135,24 +135,46 @@ model RecipientInfo {
 }
 
 model Appointment {
-  id          Int      @id @default(autoincrement())
-  trainerId   String
-  studentName String
-  workoutType String
-  location    String
-  time        String // HH:mm - pode ser validado na camada de aplicação
-  date        DateTime @db.Timestamptz(3)
-  duration    Int // em minutos
-  notes       String
+  id        String   @id @default(uuid())
+  trainerId String   @map("trainer_id")
+  studentId String   @map("student_id")
+  location  Json // Objeto location com type, name, address
+  date      DateTime @db.Timestamptz(3)
+  notes     String
 
-  trainer User @relation("TrainerAppointments", fields: [trainerId], references: [id])
+  // Status da aula
+  status      String    @default("pending") // pending, accepted, rejected, completed, cancelled, no_show
+  acceptedAt  DateTime? @map("accepted_at")
+  rejectedAt  DateTime? @map("rejected_at")
+  completedAt DateTime? @map("completed_at")
 
-  planId          String?
-  singleWorkoutId Int?
+  // Status do pagamento
+  paymentStatus String    @default("pending") // pending, paid, refunded
+  paidAt        DateTime? @map("paid_at")
 
-  plan          Plan?          @relation(fields: [planId], references: [id])
-  singleWorkout SingleWorkout? @relation(fields: [singleWorkoutId], references: [id])
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
 
+  subscriptionId   String? @map("subscription_id")
+  singleWorkoutId  Int?    @map("single_workout_id")
+  planId           String?
+  workoutSessionId String? @map("workout_session_id")
+
+  trainer        User            @relation("TrainerAppointments", fields: [trainerId], references: [id], onDelete: Cascade)
+  student        User            @relation("StudentAppointments", fields: [studentId], references: [id], onDelete: Cascade)
+  subscription   Subscription?   @relation(fields: [subscriptionId], references: [id])
+  singleWorkout  SingleWorkout?  @relation(fields: [singleWorkoutId], references: [id])
+  plan           Plan?           @relation(fields: [planId], references: [id])
+  workoutSession WorkoutSession?
+
+  @@index([trainerId])
+  @@index([date])
+  @@index([studentId])
+  @@index([subscriptionId])
+  @@index([singleWorkoutId])
+  @@index([workoutSessionId])
+  @@index([status])
+  @@index([paymentStatus])
   @@map("appointments")
 }
 
@@ -181,10 +203,104 @@ model PostLike {
   user User @relation(fields: [userId], references: [id], onDelete: Cascade)
   post Post @relation(fields: [postId], references: [id], onDelete: Cascade)
 
-  @@unique([userId, postId]) // cada user pode curtir 1x
+  @@unique([userId, postId])
   @@index([postId])
   @@index([userId])
   @@map("post_likes")
+}
+
+model TrainerHorarios {
+  id                    Int      @id @default(autoincrement())
+  trainerId             String   @unique
+  horarios              Json
+  savedLocations        Json?
+  defaultLocationConfig Json?
+  createdAt             DateTime @default(now())
+  updatedAt             DateTime @updatedAt
+
+  trainer User @relation(fields: [trainerId], references: [id], onDelete: Cascade)
+
+  @@map("trainer_horarios")
+}
+
+// === SISTEMA DE TREINOS ===
+
+model Exercise {
+  id          String   @id @default(uuid())
+  trainerId   String   @map("trainer_id")
+  name        String
+  description String?
+  series      Int
+  rest        Int
+  weight      Float?
+  type        String?
+  reps        Int?
+  timing      Int?
+  createdAt   DateTime @default(now()) @map("created_at")
+  updatedAt   DateTime @updatedAt @map("updated_at")
+  isCopy      Boolean? @map("is_copy")
+
+  trainer User @relation("TrainerExercises", fields: [trainerId], references: [id], onDelete: NoAction)
+
+  workoutSessions WorkoutSession[] @relation("WorkoutExercises")
+
+  @@index([trainerId])
+  @@index([type])
+  @@map("exercises")
+}
+
+model WorkoutSession {
+  id          String   @id @default(uuid())
+  trainerId   String   @map("trainer_id")
+  name        String
+  description String?
+  type        String?
+  dayOfWeek   Int?     @map("day_of_week") // 1- segunda, 2 - terça...
+  defaultRest Int?     @map("rest_between_exercises")
+  order       Int?
+  createdAt   DateTime @default(now()) @map("created_at")
+  updatedAt   DateTime @updatedAt @map("updated_at")
+  isCopy      Boolean? @map("is_copy")
+
+  // Relações opcionais - uma sessão pode estar vinculada a um appointment OU a um plano semanal
+  appointmentId String? @unique @map("appointment_id")
+  weeklyPlanId  String? @map("weekly_plan_id")
+
+  trainer     User         @relation("TrainerWorkouts", fields: [trainerId], references: [id], onDelete: Cascade)
+  exercises   Exercise[]   @relation("WorkoutExercises")
+  appointment Appointment? @relation(fields: [appointmentId], references: [id])
+  weeklyPlan  WeeklyPlan?  @relation(fields: [weeklyPlanId], references: [id])
+
+  @@index([trainerId])
+  @@index([type])
+  @@index([appointmentId])
+  @@index([weeklyPlanId])
+  @@map("workouts")
+}
+
+model WeeklyPlan {
+  id          String    @id @default(uuid())
+  trainerId   String    @map("trainer_id")
+  studentId   String?   @map("student_id")
+  name        String
+  description String?
+  startDate   DateTime  @map("start_date")
+  endDate     DateTime? @map("end_date")
+  isActive    Boolean   @default(true) @map("is_active")
+  createdAt   DateTime  @default(now()) @map("created_at")
+  updatedAt   DateTime  @updatedAt @map("updated_at")
+  isCopy      Boolean?  @map("is_copy")
+
+  trainer User  @relation("TrainerWeeklyPlans", fields: [trainerId], references: [id], onDelete: Cascade)
+  student User? @relation("StudentWeeklyPlans", fields: [studentId], references: [id], onDelete: Cascade)
+
+  // Relação one-to-many com WorkoutSession
+  workouts WorkoutSession[]
+
+  @@index([trainerId, studentId])
+  @@index([studentId, isActive])
+  @@index([startDate, endDate])
+  @@map("weekly_plans")
 }
 
 // === SISTEMA DE PAGAMENTOS ===
@@ -193,7 +309,7 @@ model Wallet {
   id              Int      @id @default(autoincrement())
   userId          String   @unique @map("user_id")
   pagarmeWalletId String?  @unique @map("pagarme_wallet_id")
-  balance         Int      @default(0) // em centavos
+  balance         Int      @default(0)
   lastSynced      DateTime @default(now()) @map("last_synced")
   createdAt       DateTime @default(now()) @map("created_at")
   updatedAt       DateTime @updatedAt @map("updated_at")
@@ -204,16 +320,22 @@ model Wallet {
 }
 
 model SavedCard {
-  id            Int      @id @default(autoincrement())
-  userId        String   @map("user_id")
-  pagarmeCardId String   @unique @map("pagarme_card_id")
-  lastFour      String   @map("last_four")
-  brand         String
-  holderName    String   @map("holder_name")
-  type          String // credit or debit
-  isDefault     Boolean  @default(false) @map("is_default")
-  createdAt     DateTime @default(now()) @map("created_at")
-  updatedAt     DateTime @updatedAt @map("updated_at")
+  id             Int      @id @default(autoincrement())
+  userId         String   @map("user_id")
+  pagarmeCardId  String   @unique @map("pagarme_card_id")
+  lastFour       String   @map("last_four")
+  brand          String
+  holderName     String   @map("holder_name")
+  holderDocument String   @default("") @map("holder_document")
+  expMonth       Int      @default(0) @map("exp_month")
+  expYear        Int      @default(0) @map("exp_year")
+  lastFourDigits String   @default("") @map("last_four_digits")
+  firstSixDigits String   @default("") @map("first_six_digits")
+  status         String   @default("") @map("status")
+  type           String
+  isDefault      Boolean  @default(false) @map("is_default")
+  createdAt      DateTime @default(now()) @map("created_at")
+  updatedAt      DateTime @updatedAt @map("updated_at")
 
   user User @relation(fields: [userId], references: [id], onDelete: Cascade)
 
@@ -225,7 +347,7 @@ model Plan {
   id              String   @id @default(uuid())
   trainerUsername String   @map("trainer_username")
   trainerId       String   @map("trainer_id")
-	pagarmePlanId		String   @unique @map("pagarme_plan_id")
+  pagarmePlanId   String   @unique @map("pagarme_plan_id")
   name            String
   description     String?
   category        String?
@@ -237,7 +359,7 @@ model Plan {
 
   trainer       User           @relation(fields: [trainerId], references: [id], onDelete: Cascade)
   subscriptions Subscription[]
-  Appointment   Appointment[]
+  appointments  Appointment[]
 
   @@index([trainerUsername, isActive, trainerId])
   @@map("plans")
@@ -255,6 +377,7 @@ model Subscription {
   endDate               DateTime?          @map("end_date")
   createdAt             DateTime           @default(now()) @map("created_at")
   updatedAt             DateTime           @updatedAt @map("updated_at")
+  appointments          Appointment[]
 
   user    User @relation("UserSubscriptions", fields: [userId], references: [id], onDelete: Cascade)
   trainer User @relation("TrainerSubscriptions", fields: [trainerId], references: [id], onDelete: Cascade)
@@ -269,10 +392,12 @@ model Subscription {
 model SingleWorkout {
   id              Int      @id @default(autoincrement())
   trainerUsername String   @map("trainer_username")
-  trainerId       String   @unique @map("trainer_id")
+  trainerId       String   @map("trainer_id")
   name            String
   description     String?
+  category        String?
   price           Int
+  duration        Int?
   isActive        Boolean  @default(true) @map("is_active")
   createdAt       DateTime @default(now()) @map("created_at")
   updatedAt       DateTime @updatedAt @map("updated_at")
@@ -280,68 +405,26 @@ model SingleWorkout {
   trainer      User          @relation(fields: [trainerId], references: [id], onDelete: Cascade)
   appointments Appointment[]
 
-  @@index([trainerUsername, isActive]) // Mantém o índice no username para performance
-  @@map("single_classes")
-}
-
-// === MINI LOJA - PRODUTOS ===
-
-model Product {
-  id          Int           @id @default(autoincrement())
-  trainerId   String        @map("trainer_id")
-  name        String        @db.VarChar(255)
-  description String?       @db.Text
-  price       Int           // em centavos
-  type        ProductType
-  category    String?       @db.VarChar(100)
-  images      String[]      // URLs das imagens
-  
-  // Especificações do produto (tamanhos, cores, etc.)
-  specifications Json?
-  
-  // Controle de estoque opcional (null = infinito)
-  stockQuantity  Int?        @map("stock_quantity")
-  
-  // Status
-  isActive       Boolean     @default(true) @map("is_active")
-  
-  // Timestamps
-  createdAt      DateTime    @default(now()) @map("created_at")
-  updatedAt      DateTime    @updatedAt @map("updated_at")
-
-  // Relations
-  trainer    User        @relation("TrainerProducts", fields: [trainerId], references: [id], onDelete: Cascade)
-  orderItems OrderItem[]
-
   @@index([trainerId, isActive])
-  @@index([type, category])
-  @@map("products")
+  @@index([trainerUsername, isActive])
+  @@index([category])
+  @@map("single_workouts")
 }
 
 model Order {
-  id            String      @id @default(uuid())
-  customerId    String      @map("customer_id")
-  trainerId     String      @map("trainer_id")
-  orderNumber   String      @unique @map("order_number") // Número sequencial amigável
-  
-  // Total
-  totalAmount   Int         @map("total_amount") // em centavos
-  
-  // Status e pagamento
-  status        String
-  paymentMethod String?     @map("payment_method")
-  
-  // Pagamentos
-  pagarmeOrderId String?   @unique @map("pagarme_order_id")
-  
-  // Timestamps
-  createdAt     DateTime   @default(now()) @map("created_at")
-  updatedAt     DateTime   @updatedAt @map("updated_at")
+  id             String   @id @default(uuid())
+  customerId     String   @map("customer_id")
+  trainerId      String   @map("trainer_id")
+  orderNumber    String   @unique @map("order_number")
+  totalAmount    Int      @map("total_amount")
+  status         String
+  paymentMethod  String?  @map("payment_method")
+  pagarmeOrderId String?  @unique @map("pagarme_order_id")
+  createdAt      DateTime @default(now()) @map("created_at")
+  updatedAt      DateTime @updatedAt @map("updated_at")
 
-  // Relations
-  customer   User        @relation("CustomerOrders", fields: [customerId], references: [id], onDelete: Cascade)
-  trainer    User        @relation("TrainerOrders", fields: [trainerId], references: [id], onDelete: Cascade)
-  items      OrderItem[]
+  customer User @relation("CustomerOrders", fields: [customerId], references: [id], onDelete: Cascade)
+  trainer  User @relation("TrainerOrders", fields: [trainerId], references: [id], onDelete: Cascade)
 
   @@index([customerId])
   @@index([trainerId])
@@ -350,43 +433,19 @@ model Order {
   @@map("orders")
 }
 
-model OrderItem {
-  id         Int    @id @default(autoincrement())
-  orderId    String @map("order_id")
-  productId  Int    @map("product_id")
-  quantity   Int    @default(1)
-  unitPrice  Int    @map("unit_price") // em centavos
-  totalPrice Int    @map("total_price") // em centavos
-  
-  // Especificações do item no momento da compra
-  specifications Json? // tamanho, cor, etc.
-  
-  // Timestamps
-  createdAt DateTime @default(now()) @map("created_at")
-  updatedAt DateTime @updatedAt @map("updated_at")
-
-  // Relations
-  order   Order   @relation(fields: [orderId], references: [id], onDelete: Cascade)
-  product Product @relation(fields: [productId], references: [id])
-
-  @@index([orderId])
-  @@index([productId])
-  @@map("order_items")
-}
-
 model Transaction {
-  id            Int               @id @default(autoincrement())
-  userId        String?           @map("user_id") // quem fez o pagamento
-  trainerId     String?           @map("trainer_id") // quem recebeu
-  orderId       String?           @map("order_id") // ID da ordem no Pagar.me
-  transferId    String?           @map("transfer_id") // ID da transferência no Pagar.me
+  id            Int             @id @default(autoincrement())
+  userId        String?         @map("user_id") // quem fez o pagamento
+  trainerId     String?         @map("trainer_id") // quem recebeu
+  orderId       String?         @map("order_id") // ID da ordem no Pagar.me
+  transferId    String?         @map("transfer_id") // ID da transferência no Pagar.me
   amount        Int // em centavos
   type          TransactionType
   status        String?
-  paymentMethod String?           @map("payment_method") // credit_card, pix, etc
+  paymentMethod String?         @map("payment_method")
   description   String?
-  createdAt     DateTime          @default(now()) @map("created_at")
-  updatedAt     DateTime          @updatedAt @map("updated_at")
+  createdAt     DateTime        @default(now()) @map("created_at")
+  updatedAt     DateTime        @updatedAt @map("updated_at")
 
   user    User? @relation("UserTransactions", fields: [userId], references: [id], onDelete: SetNull)
   trainer User? @relation("TrainerTransactions", fields: [trainerId], references: [id], onDelete: SetNull)
@@ -415,25 +474,12 @@ enum TransactionType {
   PAYMENT // pagamento de aula ou assinatura
   WITHDRAWAL // saque
   REFUND // estorno
-  FEE // taxa da plataforma
-  PRODUCT_SALE // venda de produto
+  FEE // taxa da plataforma 
 }
 
 enum SubscriptionStatus {
-  ACTIVE // ativa
-  CANCELLED // cancelada
-  EXPIRED // expirada
-  SUSPENDED // suspensa
-}
-
-enum ProductType {
-  APPAREL // roupas
-  ACCESSORY // acessórios
-  SUPPLEMENT // suplementos
-  EQUIPMENT // equipamentos
-  DIGITAL // produtos digitais
-  TICKET // ingressos
-  COURSE // cursos
-  EBOOK // e-books
-  OTHER // outros
+  ACTIVE
+  CANCELLED
+  EXPIRED
+  SUSPENDED
 }

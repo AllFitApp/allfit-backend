@@ -5,7 +5,7 @@ import { Request, Response } from 'express';
 const prisma = new PrismaClient();
 
 export default class CustomerController {
-	static async createCustomer({ userId }: { userId: string }) {
+	static async createCustomer({ userId }: { userId: string; }) {
 		try {
 			if (!userId) {
 				return {
@@ -173,20 +173,39 @@ export default class CustomerController {
 		try {
 			const { userId } = req.params;
 
-			const { name, email } = req.body;
+			const { name, email, cpf, number } = req.body;
 			const local = await prisma.user.findUnique({ where: { id: userId } });
 			if (!local || !local.pagarmeCustomerId) {
 				res.status(404).json({ message: 'Customer não encontrado.' });
 				return;
 			}
+			const raw = number.toString().replace(/\D/g, ''); // mantém só dígitos
 			const { data: customerPm } = await pagarmeApi.put(`/customers/${local.pagarmeCustomerId}`, {
 				name,
 				email,
+				document: cpf,
+				type: 'individual',
+				country: 'br',
+				documents: cpf,
+				phones: {
+					mobile_phone: {
+						country_code: '55',
+						area_code: raw.slice(0, 2),
+						number: raw.slice(2)
+					},
+				},
 			});
 			const updated = await prisma.user.update({
 				where: { id: userId },
-				data: { name: customerPm.name, email: customerPm.email },
+				data: {
+					name: customerPm.name,
+					email: customerPm.email,
+					cpf: customerPm.cpf,
+					number: raw
+				},
+
 			});
+			console.log('atualiza');
 			res.json(updated);
 		} catch (error: any) {
 			console.error(error.response?.data || error.message);
@@ -287,14 +306,105 @@ export default class CustomerController {
 					holderName: true,
 					isDefault: true,
 					createdAt: true,
+					expMonth: true,
+					expYear: true,
+					lastFourDigits: true,
+					status: true,
 				},
 				orderBy: { createdAt: 'desc' },
 			});
 
-			res.json({ cards });
+			res.json(cards);
 		} catch (error: any) {
 			console.error('Erro ao buscar cartões:', error.response?.data || error.message);
 			res.status(500).json({ message: 'Erro ao buscar cartões.' });
+		}
+	}
+	/**
+	 * Sincroniza cartões na Pagarme com o banco local (atualiza, cria, deleta em local)
+	 */
+	static async syncSavedCards(req: Request, res: Response) {
+		try {
+			const { userId } = req.params;
+
+			// 1. Busca o usuário e o customerId
+			const user = await prisma.user.findUnique({
+				where: { id: userId },
+				select: { pagarmeCustomerId: true },
+			});
+
+			if (!user?.pagarmeCustomerId) {
+				return res.status(400).json({ message: 'Usuário não possui customerId na Pagarme.' });
+			}
+
+			// 2. Busca cartões na Pagar.me
+			const { data: pagarmeCards } = await pagarmeApi.get(
+				`/customers/${user.pagarmeCustomerId}/cards`
+			);
+
+			const remoteCards = pagarmeCards.data; // lista de cartões
+			const remoteIds = remoteCards.map((c: any) => c.id);
+
+			// 3. Busca cartões locais
+			const localCards = await prisma.savedCard.findMany({
+				where: { userId },
+				select: { pagarmeCardId: true },
+			});
+
+			const localIds = localCards.map(c => c.pagarmeCardId);
+
+			// 4. Inserir cartões que existem na Pagar.me mas não localmente
+			for (const card of remoteCards) {
+				if (!localIds.includes(card.id)) {
+					await prisma.savedCard.create({
+						data: {
+							userId,
+							pagarmeCardId: card.id,
+							lastFour: card.last_four_digits,
+							brand: card.brand,
+							holderName: card.holder_name,
+							holderDocument: card.holder_document ?? '',
+							expMonth: card.exp_month,
+							expYear: card.exp_year,
+							lastFourDigits: card.last_four_digits,
+							firstSixDigits: card.first_six_digits,
+							status: card.status,
+							type: card.type,
+							isDefault: false, // pode ajustar a lógica
+						},
+					});
+				} else {
+					// 5. Atualizar dados caso haja divergência
+					await prisma.savedCard.updateMany({
+						where: { pagarmeCardId: card.id },
+						data: {
+							lastFour: card.last_four_digits,
+							brand: card.brand,
+							holderName: card.holder_name,
+							holderDocument: card.holder_document ?? '',
+							expMonth: card.exp_month,
+							expYear: card.exp_year,
+							lastFourDigits: card.last_four_digits,
+							firstSixDigits: card.first_six_digits,
+							status: card.status,
+							type: card.type,
+						},
+					});
+				}
+			}
+
+			// 6. Remover cartões locais que não existem mais na Pagar.me
+			const toDelete = localIds.filter(id => !remoteIds.includes(id));
+			if (toDelete.length > 0) {
+				await prisma.savedCard.deleteMany({
+					where: { pagarmeCardId: { in: toDelete } },
+				});
+			}
+
+			res.json({ message: 'Sincronização concluída com sucesso.' });
+		} catch (error: any) {
+			console.error('Erro ao sincronizar cartões:', error.response?.data || error.message);
+			res.status(500).json({ message: 'Erro ao sincronizar cartões.' });
 		}
 	}
 }

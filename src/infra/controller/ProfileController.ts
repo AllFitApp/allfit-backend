@@ -236,6 +236,12 @@ export default class ProfileController {
 									role: 'TRAINER'
 								}
 							},
+							{
+								specialty: {
+									contains: searchTerm,
+									mode: 'insensitive'
+								}
+							}
 						]
 					}
 				];
