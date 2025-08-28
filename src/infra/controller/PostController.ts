@@ -75,6 +75,7 @@ export default class PostController {
 						orderBy: { createdAt: 'desc' },
 						include: {
 							likes: { select: { userId: true } },
+							profile: { select: { username: true, name: true, avatar: true, } },
 						},
 					},
 				},
