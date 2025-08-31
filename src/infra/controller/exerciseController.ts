@@ -1,5 +1,9 @@
+import { supabase } from '@/lib/supabase';
 import { PrismaClient } from '@prisma/client';
+import dayjs from 'dayjs';
 import { Request, Response } from 'express';
+
+import path from 'path';
 
 const prisma = new PrismaClient();
 
@@ -9,17 +13,28 @@ export class ExerciseController {
 		try {
 			const { trainerId, name, description, series, reps, rest, weight, type, timing } = req.body;
 
+			const imageUrlResult = await addExerciseImage(req.file);
+			let imageUrl: string | null = null;
+
+			if (typeof imageUrlResult === 'string') {
+				imageUrl = imageUrlResult;
+			} else if (imageUrlResult && imageUrlResult.error) {
+				console.error(imageUrlResult.error);
+				imageUrl = '';
+			}
+			console.log('series', series);
 			const exercise = await prisma.exercise.create({
 				data: {
 					trainerId,
 					name,
 					description,
-					series,
+					series: Number(series),
 					reps: reps ? Number(reps) : null,
-					rest,
+					rest: Number(rest),
 					weight: weight ? Number(weight) : null,
 					type,
 					timing: timing ? Number(timing) : null,
+					imageUrl: imageUrl
 				}
 			});
 
@@ -79,4 +94,33 @@ export class ExerciseController {
 			res.status(500).json({ error: 'Erro ao excluir exercício' });
 		}
 	}
+}
+
+async function addExerciseImage(file: Express.Multer.File | undefined) {
+	if (!file) return;
+	if (file.size > 10 * 1024 * 1024) return { error: 'Tamanho da imagem excedeu o limite de 10mb' };
+
+	const fileExt = path.extname(file.originalname);
+	const fileName = `avatar-${dayjs()}${fileExt}`;
+	const filePath = fileName;
+
+	const { data: uploadData, error: uploadError } = await supabase.storage
+		.from('profiles-avatars')
+		.upload(filePath, file.buffer, {
+			contentType: file.mimetype,
+			upsert: true,
+		});
+
+	if (uploadError) {
+		console.error('Erro no upload de de imagem de exercício:', uploadError);
+		return { error: 'Erro ao enviar imagem' };
+	}
+
+	const { data: publicData } = supabase.storage.from('exercise-images').getPublicUrl(uploadData.path);
+
+	if (!publicData?.publicUrl) {
+		return { error: 'Não foi possível obter URL da imagem' };
+	}
+
+	return publicData.publicUrl;
 }
