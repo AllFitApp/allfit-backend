@@ -1,9 +1,11 @@
-import { ExerciseController } from '@/infra/controller/exerciseController';
+import { upload } from '@/lib/multer';
 import { Router } from 'express';
+
+import { ExerciseController } from '@/infra/controller/exerciseController';
 
 const exerciseRouter = Router();
 
-exerciseRouter.post('/', ExerciseController.createExercise);
+exerciseRouter.post('/', upload.single('exercise-image'), ExerciseController.createExercise);
 
 exerciseRouter.get('/trainer/:trainerId', ExerciseController.getExercisesByTrainer);
 

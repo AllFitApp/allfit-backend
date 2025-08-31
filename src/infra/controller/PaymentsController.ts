@@ -288,7 +288,13 @@ export default class PaymentController {
 				where: { OR: [{ userId }, { trainerId: userId }] },
 				orderBy: { createdAt: 'desc' },
 				include: {
-					user: true,
+					user: {
+						omit: {
+							password: true,
+							pagarmeCustomerId: true,
+							role: true,
+						}
+					}
 				}
 			});
 			const formattedTransactions = subscriptions.filter((subscription) => subscription.status === 'ACTIVE').map((subscription) => ({
@@ -297,7 +303,8 @@ export default class PaymentController {
 				cpf: subscription.user.cpf,
 				email: subscription.user.email,
 				amount: subscription.planPrice,
-				status: subscription.status
+				status: subscription.status,
+				user: subscription.user
 			}));
 
 			res.json(formattedTransactions);
@@ -306,6 +313,251 @@ export default class PaymentController {
 			res.status(500).json({ message: 'Erro ao buscar assinaturas.' });
 		}
 	}
+	/**
+	 * Listar assinaturas do treinador
+	 */
+	static async getTrainerStudents(req: Request, res: Response) {
+    try {
+        const { trainerId } = req.params;
+
+        // Buscar aulas avulsas (appointments com singleWorkout)
+        const singleWorkoutAppointments = await prisma.appointment.findMany({
+            where: { 
+                trainerId,
+                singleWorkoutId: { not: null }
+            },
+            include: {
+                student: {
+                    select: {
+                        id: true,
+                        name: true,
+                        username: true,
+                        email: true,
+                        profile: {
+                            select: {
+                                avatar: true
+                            }
+                        }
+                    }
+                },
+                singleWorkout: {
+                    select: {
+                        name: true,
+                        price: true
+                    }
+                }
+            },
+            orderBy: { createdAt: 'desc' }
+        });
+
+        // Buscar assinaturas ativas
+        const activeSubscriptions = await prisma.subscription.findMany({
+            where: { 
+                trainerId,
+                status: 'ACTIVE'
+            },
+            include: {
+                user: {
+                    select: {
+                        id: true,
+                        name: true,
+                        username: true,
+                        email: true,
+                        profile: {
+                            select: {
+                                avatar: true
+                            }
+                        }
+                    }
+                },
+                plan: {
+                    select: {
+                        name: true,
+                        price: true
+                    }
+                },
+                appointments: {
+                    where: {
+                        date: { gte: new Date() }, // Próximas aulas
+                        status: { in: ['pending', 'accepted'] }
+                    },
+                    orderBy: { date: 'asc' },
+                    take: 1
+                }
+            }
+        });
+
+        // Buscar assinaturas canceladas/expiradas (desistentes)
+        const canceledSubscriptions = await prisma.subscription.findMany({
+            where: { 
+                trainerId,
+                status: { in: ['CANCELLED', 'EXPIRED'] }
+            },
+            include: {
+                user: {
+                    select: {
+                        id: true,
+                        name: true,
+                        username: true,
+                        email: true,
+                        profile: {
+                            select: {
+                                avatar: true
+                            }
+                        }
+                    }
+                },
+                plan: {
+                    select: {
+                        name: true,
+                        price: true
+                    }
+                }
+            },
+            orderBy: { updatedAt: 'desc' }
+        });
+
+        // Formatação das aulas avulsas
+        const avulsasData = {
+            todos: singleWorkoutAppointments.map(appointment => ({
+                id: appointment.id,
+                studentId: appointment.student.id,
+                name: appointment.student.name,
+                username: appointment.student.username,
+                email: appointment.student.email,
+                photo: appointment.student.profile?.avatar || '',
+                paymentDate: appointment.paidAt,
+                scheduledDate: appointment.date,
+                completedDate: appointment.completedAt,
+                classesCount: 1, // Aula avulsa sempre é 1
+                status: appointment.status,
+                paymentStatus: appointment.paymentStatus,
+                paid: appointment.paymentStatus === 'paid',
+                workoutName: appointment.singleWorkout?.name,
+                price: appointment.singleWorkout?.price
+            })),
+            
+            // Filtrar por status específicos
+            pendentes: singleWorkoutAppointments
+                .filter(apt => apt.status === 'pending')
+                .map(appointment => ({
+                    id: appointment.id,
+                    studentId: appointment.student.id,
+                    name: appointment.student.name,
+                    username: appointment.student.username,
+                    email: appointment.student.email,
+                    photo: appointment.student.profile?.avatar || '',
+                    paymentDate: appointment.paidAt,
+                    classesCount: 1,
+                    status: 'Agendamento Pendente'
+                })),
+                
+            finalizadas: singleWorkoutAppointments
+                .filter(apt => apt.status === 'completed')
+                .map(appointment => ({
+                    id: appointment.id,
+                    studentId: appointment.student.id,
+                    name: appointment.student.name,
+                    username: appointment.student.username,
+                    email: appointment.student.email,
+                    photo: appointment.student.profile?.avatar || '',
+                    completedDate: appointment.completedAt,
+                    classesCount: 1,
+                    status: 'Concluído'
+                })),
+                
+            marcadas: singleWorkoutAppointments
+                .filter(apt => apt.status === 'accepted' && new Date(apt.date) > new Date())
+                .map(appointment => ({
+                    id: appointment.id,
+                    studentId: appointment.student.id,
+                    name: appointment.student.name,
+                    username: appointment.student.username,
+                    email: appointment.student.email,
+                    photo: appointment.student.profile?.avatar || '',
+                    scheduledDate: appointment.date,
+                    classesCount: 1,
+                    status: 'Agendado'
+                }))
+        };
+
+        // Formatação das assinaturas
+        const assinaturasData = {
+            aulasAgendadas: activeSubscriptions
+                .filter(sub => sub.appointments.length > 0)
+                .map(subscription => ({
+                    id: subscription.id,
+                    studentId: subscription.user.id,
+                    name: subscription.user.name,
+                    username: subscription.user.username,
+                    email: subscription.user.email,
+                    photo: subscription.user.profile?.avatar || '',
+                    plan: subscription.plan.name,
+                    planPrice: subscription.planPrice,
+                    paymentStatus: subscription.status === 'ACTIVE' ? 'Em dia' : 'Atrasado',
+                    paymentMethod: 'Não informado', // Seria necessário buscar da última transação
+                    nextClass: subscription.appointments[0]?.date,
+                    subscriptionDate: subscription.startDate
+                })),
+                
+            semAgendamento: activeSubscriptions
+                .filter(sub => sub.appointments.length === 0)
+                .map(subscription => ({
+                    id: subscription.id,
+                    studentId: subscription.user.id,
+                    name: subscription.user.name,
+                    username: subscription.user.username,
+                    email: subscription.user.email,
+                    photo: subscription.user.profile?.avatar || '',
+                    plan: subscription.plan.name,
+                    planPrice: subscription.planPrice,
+                    paymentStatus: subscription.status === 'ACTIVE' ? 'Em dia' : 'Atrasado',
+                    paymentMethod: 'Não informado', // Seria necessário buscar da última transação
+                    subscriptionDate: subscription.startDate
+                })),
+                
+            desistentes: canceledSubscriptions.map(subscription => ({
+                id: subscription.id,
+                studentId: subscription.user.id,
+                name: subscription.user.name,
+                username: subscription.user.username,
+                email: subscription.user.email,
+                photo: subscription.user.profile?.avatar || '',
+                plan: subscription.plan.name,
+                planPrice: subscription.planPrice,
+                cancelDate: subscription.updatedAt, // Data da última atualização (cancelamento)
+                subscriptionDate: subscription.startDate
+            }))
+        };
+
+        // Contar totais para cada categoria
+        const summary = {
+            totalSingleWorkouts: singleWorkoutAppointments.length,
+            totalActiveSubscriptions: activeSubscriptions.length,
+            totalCanceledSubscriptions: canceledSubscriptions.length,
+            totalStudents: new Set([
+                ...singleWorkoutAppointments.map(apt => apt.student.id),
+                ...activeSubscriptions.map(sub => sub.user.id)
+            ]).size
+        };
+
+        const response = {
+            summary,
+            avulsas: avulsasData,
+            assinaturas: assinaturasData
+        };
+
+        res.json(response);
+        
+    } catch (error: any) {
+        console.error('Erro ao buscar alunos do trainer:', error);
+        res.status(500).json({ 
+            message: 'Erro ao buscar alunos do trainer.',
+            error: error.message 
+        });
+    }
+}
+
 	/**
 	 * Cancelar assinatura de aluno
 	 */
@@ -709,4 +961,23 @@ export default class PaymentController {
 			res.status(500).json({ message: 'Erro ao editar plano.' });
 		}
 	}
+}
+
+
+// Função auxiliar para buscar método de pagamento da última transação
+ async function getLastPaymentMethod(userId: string, trainerId: string) {
+    try {
+        const lastTransaction = await prisma.transaction.findFirst({
+            where: {
+                userId,
+                trainerId,
+                type: 'PAYMENT'
+            },
+            orderBy: { createdAt: 'desc' }
+        });
+        
+        return lastTransaction?.paymentMethod || 'Não informado';
+    } catch (error) {
+        return 'Não informado';
+    }
 }
