@@ -9,6 +9,7 @@ export class WorkoutController {
 		try {
 			const { trainerId, name, description, startDate, endDate, workoutSessions } = req.body;
 			const workoutSessionIds = workoutSessions.map((session: { id: any; dayOfWeek: number; }) => session.id);
+			const workoutSessionDays = workoutSessions.map((session: { id: any; dayOfWeek: number; }) => session.dayOfWeek);
 
 			const sessions = await prisma.workoutSession.findMany({
 				where: {
@@ -27,11 +28,11 @@ export class WorkoutController {
 					startDate,
 					endDate,
 					workouts: {
-						create: sessions.map((s) => ({
+						create: sessions.map((s, index) => ({
 							trainerId,
 							name: s.name,
 							description: s.description,
-							dayOfWeek: workoutSessionIds.indexOf(s.id).dayOfWeek,
+							dayOfWeek: workoutSessionDays[index],
 							type: s.type,
 							defaultRest: s.defaultRest,
 							isCopy: true,
@@ -107,11 +108,9 @@ export class WorkoutController {
 						{ id },
 						{ appointmentId: id },
 					],
-					isCopy: true
 				},
 				include: { exercises: true }
 			});
-
 			res.json(sessions);
 		} catch (error) {
 			console.error(error);
@@ -327,6 +326,23 @@ export class WorkoutController {
 			});
 
 			res.json({ message: 'Sessão excluída com sucesso' });
+		} catch (error) {
+			console.error(error);
+			res.status(500).json({ error: 'Erro ao excluir sessão' });
+		}
+	}
+	/**
+	 * Deletar plano semanal (planilha)
+	 */
+	static async deleteWeeklyPlan(req: Request, res: Response) {
+		try {
+			const { id } = req.params;
+
+			await prisma.weeklyPlan.delete({
+				where: { id }
+			});
+
+			res.json({ message: 'Planilha excluída com sucesso' });
 		} catch (error) {
 			console.error(error);
 			res.status(500).json({ error: 'Erro ao excluir sessão' });
