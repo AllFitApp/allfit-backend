@@ -1,19 +1,23 @@
-import { PrismaClient } from '@prisma/client';
 import { Request, Response } from 'express';
+
+import { supabase } from '@/lib/supabase';
+import { PrismaClient } from '@prisma/client';
+import dayjs from 'dayjs';
+import path from 'path';
 
 const prisma = new PrismaClient();
 
 export default class PaymentController {
 	/**
-		 * Criar nova aula avulsa
-		 */
+	 * Criar nova aula avulsa
+	 */
 	static async createSingleWorkout(req: Request, res: Response) {
 		try {
 			const { userId, name, description, price, category, duration, isFree } = req.body;
 
 			if (!userId || !name || !description) {
+				console.log('Campos não preenchidos: ', userId, name, description);
 				res.status(400).json({ message: 'Todos os campos obrigatórios devem estar preenchidos.' });
-				console.log('Campos: ', userId, name, description, price);
 				return;
 			}
 
@@ -40,13 +44,24 @@ export default class PaymentController {
 				where: {
 					trainerId: userId,
 					name: name.trim(),
-					isActive: true
+					isActive: true,
 				},
 			});
 
 			if (existingWorkout) {
 				res.status(400).json({ message: 'Já existe uma aula avulsa com este nome.' });
 				return;
+			}
+
+
+			const imageUrlResult = await addExerciseImage(req.file);
+			let imageUrl: string | null = null;
+
+			if (typeof imageUrlResult === 'string') {
+				imageUrl = imageUrlResult;
+			} else if (imageUrlResult && imageUrlResult.error) {
+				console.error(imageUrlResult.error);
+				imageUrl = '';
 			}
 
 			const workout = await prisma.singleWorkout.create({
@@ -58,6 +73,7 @@ export default class PaymentController {
 					price: priceInCents,
 					category: category?.trim(),
 					duration: duration ? parseInt(duration) : null,
+					imageUrl
 				},
 			});
 
@@ -90,22 +106,12 @@ export default class PaymentController {
 
 			const workouts = await prisma.singleWorkout.findMany({
 				where: whereConditions,
-				select: {
-					id: true,
-					name: true,
-					description: true,
-					price: true,
-					category: true,
-					duration: true,
-					isActive: true,
-					createdAt: true,
-				},
 				orderBy: {
 					createdAt: 'desc',
 				},
 			});
 
-			const workoutsWithFormattedPrice = workouts.map(workout => ({
+			const workoutsWithFormattedPrice = workouts.map((workout) => ({
 				...workout,
 				priceFormatted: (workout.price / 100).toFixed(2),
 			}));
@@ -146,7 +152,7 @@ export default class PaymentController {
 									rate: true,
 									alunos: true,
 									specialty: true,
-								}
+								},
 							},
 						},
 					},
@@ -259,7 +265,7 @@ export default class PaymentController {
 
 				res.json({
 					message: 'Aula avulsa desativada devido a agendamentos futuros existentes.',
-					deactivated: true
+					deactivated: true,
 				});
 				return;
 			}
@@ -296,7 +302,7 @@ export default class PaymentController {
 				},
 			});
 
-			const formattedCategories = categories.map(cat => ({
+			const formattedCategories = categories.map((cat) => ({
 				name: cat.category,
 				count: cat._count.category,
 			}));
@@ -307,4 +313,33 @@ export default class PaymentController {
 			res.status(500).json({ message: 'Erro ao buscar categorias.' });
 		}
 	}
+}
+
+async function addExerciseImage(file: Express.Multer.File | undefined) {
+	if (!file) return;
+	if (file.size > 10 * 1024 * 1024) return { error: 'Tamanho da imagem excedeu o limite de 10mb' };
+
+	const fileExt = path.extname(file.originalname);
+	const fileName = `exercise-${dayjs()}${fileExt}`;
+	const filePath = fileName;
+
+	const { data: uploadData, error: uploadError } = await supabase.storage
+		.from('subscriptions-images')
+		.upload(filePath, file.buffer, {
+			contentType: file.mimetype,
+			upsert: true,
+		});
+
+	if (uploadError) {
+		console.error('Erro no upload de de imagem de exercício:', uploadError);
+		return { error: 'Erro ao enviar imagem' };
+	}
+
+	const { data: publicData } = supabase.storage.from('subscriptions-images').getPublicUrl(uploadData.path);
+
+	if (!publicData?.publicUrl) {
+		return { error: 'Não foi possível obter URL da imagem' };
+	}
+
+	return publicData.publicUrl;
 }

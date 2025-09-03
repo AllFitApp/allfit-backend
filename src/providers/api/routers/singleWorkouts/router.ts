@@ -3,12 +3,13 @@
 import { Router } from 'express';
 
 import PaymentController from '@/infra/controller/SingleWorkoutController';
+import { upload } from '@/lib/multer';
 
 const router = Router();
 
 // ===== AULAS AVULSAS - ROTAS ATUALIZADAS =====
 // Criar nova aula avulsa (antes era createSingleWorkoutModel)
-router.post('/', PaymentController.createSingleWorkout); // Cria nova aula avulsa ✅
+router.post('/', upload.single('subscriptions-images'), PaymentController.createSingleWorkout); // Cria nova aula avulsa ✅
 router.get('/trainer/:username', PaymentController.getSingleWorkoutsByTrainer); // Lista aulas avulsas do treinador com filtros ✅
 router.get('/trainer/:username/categories', PaymentController.getSingleWorkoutCategories); // Lista categorias disponíveis ✅
 

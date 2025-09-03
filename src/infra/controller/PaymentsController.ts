@@ -1,8 +1,11 @@
 // infra/controller/PagarmeController.ts
 import pagarmeApi from '@/lib/axios';
+import { supabase } from '@/lib/supabase';
 import { PrismaClient } from '@prisma/client';
 import dayjs from 'dayjs';
 import { Request, Response } from 'express';
+
+import path from 'path';
 
 const prisma = new PrismaClient();
 
@@ -24,6 +27,7 @@ export default class PaymentController {
 	static async createMonthlyModel(req: Request, res: Response) {
 		try {
 			const { userId, name, description, price, features } = req.body;
+
 			const user = await prisma.user.findUnique({
 				where: { id: userId },
 				select: { role: true, username: true, wallet: { select: { pagarmeWalletId: true } } },
@@ -35,10 +39,6 @@ export default class PaymentController {
 			}
 			if (!user.wallet?.pagarmeWalletId) {
 				res.status(405).json({ message: 'Você deve ter uma carteira para continuar.' });
-				return;
-			}
-			if (typeof price !== 'number') {
-				res.status(400).json({ message: 'O valor do plano deve ser um número.' });
 				return;
 			}
 			if (price <= 1000) {
@@ -73,6 +73,16 @@ export default class PaymentController {
 				return;
 			}
 
+			const imageUrlResult = await addImage(req.file);
+			let imageUrl: string | null = null;
+
+			if (typeof imageUrlResult === 'string') {
+				imageUrl = imageUrlResult;
+			} else if (imageUrlResult && imageUrlResult.error) {
+				console.error(imageUrlResult.error);
+				imageUrl = '';
+			}
+
 			const plan = await prisma.plan.create({
 				data: {
 					trainerId: userId,
@@ -80,9 +90,10 @@ export default class PaymentController {
 					pagarmePlanId: data.id,
 					name,
 					description,
-					price: price,
+					price: Number(price),
 					features,
 					isActive: true,
+					imageUrl
 				},
 			});
 
@@ -116,6 +127,7 @@ export default class PaymentController {
 				},
 				omit: {
 					trainerId: true,
+					pagarmePlanId: true,
 					// trainerUsername: true,
 				},
 				orderBy: { createdAt: 'desc' },
@@ -317,246 +329,246 @@ export default class PaymentController {
 	 * Listar assinaturas do treinador
 	 */
 	static async getTrainerStudents(req: Request, res: Response) {
-    try {
-        const { trainerId } = req.params;
+		try {
+			const { trainerId } = req.params;
 
-        // Buscar aulas avulsas (appointments com singleWorkout)
-        const singleWorkoutAppointments = await prisma.appointment.findMany({
-            where: { 
-                trainerId,
-                singleWorkoutId: { not: null }
-            },
-            include: {
-                student: {
-                    select: {
-                        id: true,
-                        name: true,
-                        username: true,
-                        email: true,
-                        profile: {
-                            select: {
-                                avatar: true
-                            }
-                        }
-                    }
-                },
-                singleWorkout: {
-                    select: {
-                        name: true,
-                        price: true
-                    }
-                }
-            },
-            orderBy: { createdAt: 'desc' }
-        });
+			// Buscar aulas avulsas (appointments com singleWorkout)
+			const singleWorkoutAppointments = await prisma.appointment.findMany({
+				where: {
+					trainerId,
+					singleWorkoutId: { not: null }
+				},
+				include: {
+					student: {
+						select: {
+							id: true,
+							name: true,
+							username: true,
+							email: true,
+							profile: {
+								select: {
+									avatar: true
+								}
+							}
+						}
+					},
+					singleWorkout: {
+						select: {
+							name: true,
+							price: true
+						}
+					}
+				},
+				orderBy: { createdAt: 'desc' }
+			});
 
-        // Buscar assinaturas ativas
-        const activeSubscriptions = await prisma.subscription.findMany({
-            where: { 
-                trainerId,
-                status: 'ACTIVE'
-            },
-            include: {
-                user: {
-                    select: {
-                        id: true,
-                        name: true,
-                        username: true,
-                        email: true,
-                        profile: {
-                            select: {
-                                avatar: true
-                            }
-                        }
-                    }
-                },
-                plan: {
-                    select: {
-                        name: true,
-                        price: true
-                    }
-                },
-                appointments: {
-                    where: {
-                        date: { gte: new Date() }, // Próximas aulas
-                        status: { in: ['pending', 'accepted'] }
-                    },
-                    orderBy: { date: 'asc' },
-                    take: 1
-                }
-            }
-        });
+			// Buscar assinaturas ativas
+			const activeSubscriptions = await prisma.subscription.findMany({
+				where: {
+					trainerId,
+					status: 'ACTIVE'
+				},
+				include: {
+					user: {
+						select: {
+							id: true,
+							name: true,
+							username: true,
+							email: true,
+							profile: {
+								select: {
+									avatar: true
+								}
+							}
+						}
+					},
+					plan: {
+						select: {
+							name: true,
+							price: true
+						}
+					},
+					appointments: {
+						where: {
+							date: { gte: new Date() }, // Próximas aulas
+							status: { in: ['pending', 'accepted'] }
+						},
+						orderBy: { date: 'asc' },
+						take: 1
+					}
+				}
+			});
 
-        // Buscar assinaturas canceladas/expiradas (desistentes)
-        const canceledSubscriptions = await prisma.subscription.findMany({
-            where: { 
-                trainerId,
-                status: { in: ['CANCELLED', 'EXPIRED'] }
-            },
-            include: {
-                user: {
-                    select: {
-                        id: true,
-                        name: true,
-                        username: true,
-                        email: true,
-                        profile: {
-                            select: {
-                                avatar: true
-                            }
-                        }
-                    }
-                },
-                plan: {
-                    select: {
-                        name: true,
-                        price: true
-                    }
-                }
-            },
-            orderBy: { updatedAt: 'desc' }
-        });
+			// Buscar assinaturas canceladas/expiradas (desistentes)
+			const canceledSubscriptions = await prisma.subscription.findMany({
+				where: {
+					trainerId,
+					status: { in: ['CANCELLED', 'EXPIRED'] }
+				},
+				include: {
+					user: {
+						select: {
+							id: true,
+							name: true,
+							username: true,
+							email: true,
+							profile: {
+								select: {
+									avatar: true
+								}
+							}
+						}
+					},
+					plan: {
+						select: {
+							name: true,
+							price: true
+						}
+					}
+				},
+				orderBy: { updatedAt: 'desc' }
+			});
 
-        // Formatação das aulas avulsas
-        const avulsasData = {
-            todos: singleWorkoutAppointments.map(appointment => ({
-                id: appointment.id,
-                studentId: appointment.student.id,
-                name: appointment.student.name,
-                username: appointment.student.username,
-                email: appointment.student.email,
-                photo: appointment.student.profile?.avatar || '',
-                paymentDate: appointment.paidAt,
-                scheduledDate: appointment.date,
-                completedDate: appointment.completedAt,
-                classesCount: 1, // Aula avulsa sempre é 1
-                status: appointment.status,
-                paymentStatus: appointment.paymentStatus,
-                paid: appointment.paymentStatus === 'paid',
-                workoutName: appointment.singleWorkout?.name,
-                price: appointment.singleWorkout?.price
-            })),
-            
-            // Filtrar por status específicos
-            pendentes: singleWorkoutAppointments
-                .filter(apt => apt.status === 'pending')
-                .map(appointment => ({
-                    id: appointment.id,
-                    studentId: appointment.student.id,
-                    name: appointment.student.name,
-                    username: appointment.student.username,
-                    email: appointment.student.email,
-                    photo: appointment.student.profile?.avatar || '',
-                    paymentDate: appointment.paidAt,
-                    classesCount: 1,
-                    status: 'Agendamento Pendente'
-                })),
-                
-            finalizadas: singleWorkoutAppointments
-                .filter(apt => apt.status === 'completed')
-                .map(appointment => ({
-                    id: appointment.id,
-                    studentId: appointment.student.id,
-                    name: appointment.student.name,
-                    username: appointment.student.username,
-                    email: appointment.student.email,
-                    photo: appointment.student.profile?.avatar || '',
-                    completedDate: appointment.completedAt,
-                    classesCount: 1,
-                    status: 'Concluído'
-                })),
-                
-            marcadas: singleWorkoutAppointments
-                .filter(apt => apt.status === 'accepted' && new Date(apt.date) > new Date())
-                .map(appointment => ({
-                    id: appointment.id,
-                    studentId: appointment.student.id,
-                    name: appointment.student.name,
-                    username: appointment.student.username,
-                    email: appointment.student.email,
-                    photo: appointment.student.profile?.avatar || '',
-                    scheduledDate: appointment.date,
-                    classesCount: 1,
-                    status: 'Agendado'
-                }))
-        };
+			// Formatação das aulas avulsas
+			const avulsasData = {
+				todos: singleWorkoutAppointments.map(appointment => ({
+					id: appointment.id,
+					studentId: appointment.student.id,
+					name: appointment.student.name,
+					username: appointment.student.username,
+					email: appointment.student.email,
+					photo: appointment.student.profile?.avatar || '',
+					paymentDate: appointment.paidAt,
+					scheduledDate: appointment.date,
+					completedDate: appointment.completedAt,
+					classesCount: 1, // Aula avulsa sempre é 1
+					status: appointment.status,
+					paymentStatus: appointment.paymentStatus,
+					paid: appointment.paymentStatus === 'paid',
+					workoutName: appointment.singleWorkout?.name,
+					price: appointment.singleWorkout?.price
+				})),
 
-        // Formatação das assinaturas
-        const assinaturasData = {
-            aulasAgendadas: activeSubscriptions
-                .filter(sub => sub.appointments.length > 0)
-                .map(subscription => ({
-                    id: subscription.id,
-                    studentId: subscription.user.id,
-                    name: subscription.user.name,
-                    username: subscription.user.username,
-                    email: subscription.user.email,
-                    photo: subscription.user.profile?.avatar || '',
-                    plan: subscription.plan.name,
-                    planPrice: subscription.planPrice,
-                    paymentStatus: subscription.status === 'ACTIVE' ? 'Em dia' : 'Atrasado',
-                    paymentMethod: 'Não informado', // Seria necessário buscar da última transação
-                    nextClass: subscription.appointments[0]?.date,
-                    subscriptionDate: subscription.startDate
-                })),
-                
-            semAgendamento: activeSubscriptions
-                .filter(sub => sub.appointments.length === 0)
-                .map(subscription => ({
-                    id: subscription.id,
-                    studentId: subscription.user.id,
-                    name: subscription.user.name,
-                    username: subscription.user.username,
-                    email: subscription.user.email,
-                    photo: subscription.user.profile?.avatar || '',
-                    plan: subscription.plan.name,
-                    planPrice: subscription.planPrice,
-                    paymentStatus: subscription.status === 'ACTIVE' ? 'Em dia' : 'Atrasado',
-                    paymentMethod: 'Não informado', // Seria necessário buscar da última transação
-                    subscriptionDate: subscription.startDate
-                })),
-                
-            desistentes: canceledSubscriptions.map(subscription => ({
-                id: subscription.id,
-                studentId: subscription.user.id,
-                name: subscription.user.name,
-                username: subscription.user.username,
-                email: subscription.user.email,
-                photo: subscription.user.profile?.avatar || '',
-                plan: subscription.plan.name,
-                planPrice: subscription.planPrice,
-                cancelDate: subscription.updatedAt, // Data da última atualização (cancelamento)
-                subscriptionDate: subscription.startDate
-            }))
-        };
+				// Filtrar por status específicos
+				pendentes: singleWorkoutAppointments
+					.filter(apt => apt.status === 'pending')
+					.map(appointment => ({
+						id: appointment.id,
+						studentId: appointment.student.id,
+						name: appointment.student.name,
+						username: appointment.student.username,
+						email: appointment.student.email,
+						photo: appointment.student.profile?.avatar || '',
+						paymentDate: appointment.paidAt,
+						classesCount: 1,
+						status: 'Agendamento Pendente'
+					})),
 
-        // Contar totais para cada categoria
-        const summary = {
-            totalSingleWorkouts: singleWorkoutAppointments.length,
-            totalActiveSubscriptions: activeSubscriptions.length,
-            totalCanceledSubscriptions: canceledSubscriptions.length,
-            totalStudents: new Set([
-                ...singleWorkoutAppointments.map(apt => apt.student.id),
-                ...activeSubscriptions.map(sub => sub.user.id)
-            ]).size
-        };
+				finalizadas: singleWorkoutAppointments
+					.filter(apt => apt.status === 'completed')
+					.map(appointment => ({
+						id: appointment.id,
+						studentId: appointment.student.id,
+						name: appointment.student.name,
+						username: appointment.student.username,
+						email: appointment.student.email,
+						photo: appointment.student.profile?.avatar || '',
+						completedDate: appointment.completedAt,
+						classesCount: 1,
+						status: 'Concluído'
+					})),
 
-        const response = {
-            summary,
-            avulsas: avulsasData,
-            assinaturas: assinaturasData
-        };
+				marcadas: singleWorkoutAppointments
+					.filter(apt => apt.status === 'accepted' && new Date(apt.date) > new Date())
+					.map(appointment => ({
+						id: appointment.id,
+						studentId: appointment.student.id,
+						name: appointment.student.name,
+						username: appointment.student.username,
+						email: appointment.student.email,
+						photo: appointment.student.profile?.avatar || '',
+						scheduledDate: appointment.date,
+						classesCount: 1,
+						status: 'Agendado'
+					}))
+			};
 
-        res.json(response);
-        
-    } catch (error: any) {
-        console.error('Erro ao buscar alunos do trainer:', error);
-        res.status(500).json({ 
-            message: 'Erro ao buscar alunos do trainer.',
-            error: error.message 
-        });
-    }
-}
+			// Formatação das assinaturas
+			const assinaturasData = {
+				aulasAgendadas: activeSubscriptions
+					.filter(sub => sub.appointments.length > 0)
+					.map(subscription => ({
+						id: subscription.id,
+						studentId: subscription.user.id,
+						name: subscription.user.name,
+						username: subscription.user.username,
+						email: subscription.user.email,
+						photo: subscription.user.profile?.avatar || '',
+						plan: subscription.plan.name,
+						planPrice: subscription.planPrice,
+						paymentStatus: subscription.status === 'ACTIVE' ? 'Em dia' : 'Atrasado',
+						paymentMethod: 'Não informado', // Seria necessário buscar da última transação
+						nextClass: subscription.appointments[0]?.date,
+						subscriptionDate: subscription.startDate
+					})),
+
+				semAgendamento: activeSubscriptions
+					.filter(sub => sub.appointments.length === 0)
+					.map(subscription => ({
+						id: subscription.id,
+						studentId: subscription.user.id,
+						name: subscription.user.name,
+						username: subscription.user.username,
+						email: subscription.user.email,
+						photo: subscription.user.profile?.avatar || '',
+						plan: subscription.plan.name,
+						planPrice: subscription.planPrice,
+						paymentStatus: subscription.status === 'ACTIVE' ? 'Em dia' : 'Atrasado',
+						paymentMethod: 'Não informado', // Seria necessário buscar da última transação
+						subscriptionDate: subscription.startDate
+					})),
+
+				desistentes: canceledSubscriptions.map(subscription => ({
+					id: subscription.id,
+					studentId: subscription.user.id,
+					name: subscription.user.name,
+					username: subscription.user.username,
+					email: subscription.user.email,
+					photo: subscription.user.profile?.avatar || '',
+					plan: subscription.plan.name,
+					planPrice: subscription.planPrice,
+					cancelDate: subscription.updatedAt, // Data da última atualização (cancelamento)
+					subscriptionDate: subscription.startDate
+				}))
+			};
+
+			// Contar totais para cada categoria
+			const summary = {
+				totalSingleWorkouts: singleWorkoutAppointments.length,
+				totalActiveSubscriptions: activeSubscriptions.length,
+				totalCanceledSubscriptions: canceledSubscriptions.length,
+				totalStudents: new Set([
+					...singleWorkoutAppointments.map(apt => apt.student.id),
+					...activeSubscriptions.map(sub => sub.user.id)
+				]).size
+			};
+
+			const response = {
+				summary,
+				avulsas: avulsasData,
+				assinaturas: assinaturasData
+			};
+
+			res.json(response);
+
+		} catch (error: any) {
+			console.error('Erro ao buscar alunos do trainer:', error);
+			res.status(500).json({
+				message: 'Erro ao buscar alunos do trainer.',
+				error: error.message
+			});
+		}
+	}
 
 	/**
 	 * Cancelar assinatura de aluno
@@ -965,19 +977,48 @@ export default class PaymentController {
 
 
 // Função auxiliar para buscar método de pagamento da última transação
- async function getLastPaymentMethod(userId: string, trainerId: string) {
-    try {
-        const lastTransaction = await prisma.transaction.findFirst({
-            where: {
-                userId,
-                trainerId,
-                type: 'PAYMENT'
-            },
-            orderBy: { createdAt: 'desc' }
-        });
-        
-        return lastTransaction?.paymentMethod || 'Não informado';
-    } catch (error) {
-        return 'Não informado';
-    }
+async function getLastPaymentMethod(userId: string, trainerId: string) {
+	try {
+		const lastTransaction = await prisma.transaction.findFirst({
+			where: {
+				userId,
+				trainerId,
+				type: 'PAYMENT'
+			},
+			orderBy: { createdAt: 'desc' }
+		});
+
+		return lastTransaction?.paymentMethod || 'Não informado';
+	} catch (error) {
+		return 'Não informado';
+	}
+}
+
+async function addImage(file: Express.Multer.File | undefined) {
+	if (!file) return;
+	if (file.size > 10 * 1024 * 1024) return { error: 'Tamanho da imagem excedeu o limite de 10mb' };
+
+	const fileExt = path.extname(file.originalname);
+	const fileName = `exercise-${dayjs()}${fileExt}`;
+	const filePath = fileName;
+
+	const { data: uploadData, error: uploadError } = await supabase.storage
+		.from('subscriptions-images')
+		.upload(filePath, file.buffer, {
+			contentType: file.mimetype,
+			upsert: true,
+		});
+
+	if (uploadError) {
+		console.error('Erro no upload de de imagem de exercício:', uploadError);
+		return { error: 'Erro ao enviar imagem' };
+	}
+
+	const { data: publicData } = supabase.storage.from('subscriptions-images').getPublicUrl(uploadData.path);
+
+	if (!publicData?.publicUrl) {
+		return { error: 'Não foi possível obter URL da imagem' };
+	}
+
+	return publicData.publicUrl;
 }
