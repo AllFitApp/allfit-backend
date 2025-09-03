@@ -101,11 +101,11 @@ async function addExerciseImage(file: Express.Multer.File | undefined) {
 	if (file.size > 10 * 1024 * 1024) return { error: 'Tamanho da imagem excedeu o limite de 10mb' };
 
 	const fileExt = path.extname(file.originalname);
-	const fileName = `avatar-${dayjs()}${fileExt}`;
+	const fileName = `exercise-${dayjs()}${fileExt}`;
 	const filePath = fileName;
 
 	const { data: uploadData, error: uploadError } = await supabase.storage
-		.from('profiles-avatars')
+		.from('exercise-images')
 		.upload(filePath, file.buffer, {
 			contentType: file.mimetype,
 			upsert: true,

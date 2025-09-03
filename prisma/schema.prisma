@@ -352,6 +352,7 @@ model Plan {
   isActive        Boolean  @default(true) @map("is_active")
   createdAt       DateTime @default(now()) @map("created_at")
   updatedAt       DateTime @updatedAt @map("updated_at")
+  imageUrl        String?  @map("image_url")
 
   trainer       User           @relation(fields: [trainerId], references: [id], onDelete: Cascade)
   subscriptions Subscription[]
@@ -397,6 +398,7 @@ model SingleWorkout {
   isActive        Boolean  @default(true) @map("is_active")
   createdAt       DateTime @default(now()) @map("created_at")
   updatedAt       DateTime @updatedAt @map("updated_at")
+  imageUrl        String?  @map("image_url")
 
   trainer      User          @relation(fields: [trainerId], references: [id], onDelete: Cascade)
   appointments Appointment[]

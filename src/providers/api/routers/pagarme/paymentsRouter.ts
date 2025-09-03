@@ -2,6 +2,7 @@
 import { Router } from 'express';
 
 import PaymentController from '@/infra/controller/PaymentsController';
+import { upload } from '@/lib/multer';
 
 const router = Router();
 
@@ -9,7 +10,7 @@ const router = Router();
 router.post('/single-workout', PaymentController.paySingleWorkout); // Realiza pagamento avulso: cartão ou Pix ✅ (necessita de método rollback ou webhook)
 
 // ===== PLANOS/ASSINATURAS =====
-router.post('/plan', PaymentController.createMonthlyModel); // Cria modelo de assinatura ✅
+router.post('/plan', upload.single('subscriptions-images'), PaymentController.createMonthlyModel); // Cria modelo de assinatura ✅
 router.get('/plans/:username', PaymentController.getTrainerPlans); // Lista planos criados do treinador ✅
 router.put('/plan/:planId', PaymentController.editPlans); // Editar plano ✅ (necessita de método rollback)
 router.delete('/plan/:planId', PaymentController.deleteSubscriptionModel); // Deleta plano ✅ (necessita de método rollback)
