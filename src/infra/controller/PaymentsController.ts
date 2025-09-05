@@ -91,7 +91,7 @@ export default class PaymentController {
 					name,
 					description,
 					price: Number(price),
-					features,
+					features: JSON.parse(features),
 					isActive: true,
 					imageUrl
 				},
@@ -131,6 +131,29 @@ export default class PaymentController {
 					// trainerUsername: true,
 				},
 				orderBy: { createdAt: 'desc' },
+			});
+
+			res.json(plans);
+		} catch (error: any) {
+			console.error('Erro ao buscar planos:', error.response?.data || error.message);
+			res.status(500).json({ message: 'Erro ao buscar planos.' });
+		}
+	}
+	/**
+	 * 
+	 */
+	static async getTrainerPlan(req: Request, res: Response) {
+		try {
+			const { planId } = req.params;
+
+			const plans = await prisma.plan.findUnique({
+				where: {
+					id: planId
+				},
+				omit: {
+					trainerId: true,
+					pagarmePlanId: true,
+				},
 			});
 
 			res.json(plans);
@@ -275,7 +298,6 @@ export default class PaymentController {
 				}
 			});
 
-
 			res.status(201).json({
 				message: 'Assinatura criada com sucesso',
 				subscription: {
@@ -297,7 +319,7 @@ export default class PaymentController {
 		try {
 			const { userId } = req.params;
 			const subscriptions = await prisma.subscription.findMany({
-				where: { OR: [{ userId }, { trainerId: userId }] },
+				where: { OR: [{ userId }, { trainerId: userId }], status: 'ACTIVE' },
 				orderBy: { createdAt: 'desc' },
 				include: {
 					user: {
@@ -306,20 +328,24 @@ export default class PaymentController {
 							pagarmeCustomerId: true,
 							role: true,
 						}
+					},
+					trainer: {
+						omit: {
+							password: true,
+							pagarmeCustomerId: true,
+							role: true,
+							cpf: true
+						}
+					},
+					plan: {
+						omit: {
+							trainerId: true,
+						}
 					}
 				}
 			});
-			const formattedTransactions = subscriptions.filter((subscription) => subscription.status === 'ACTIVE').map((subscription) => ({
-				date: subscription.startDate,
-				name: subscription.user.name,
-				cpf: subscription.user.cpf,
-				email: subscription.user.email,
-				amount: subscription.planPrice,
-				status: subscription.status,
-				user: subscription.user
-			}));
 
-			res.json(formattedTransactions);
+			res.json(subscriptions);
 		} catch (error: any) {
 			console.error('Erro ao buscar assinaturas:', error.response?.data || error.message);
 			res.status(500).json({ message: 'Erro ao buscar assinaturas.' });
@@ -668,8 +694,10 @@ export default class PaymentController {
 	static async deleteSubscriptionModel(req: Request, res: Response) {
 		try {
 			const { planId } = req.params;
-			await pagarmeApi.delete(`/plans/${planId}`);
-			await prisma.plan.delete({ where: { id: planId } });
+
+			const deletedPlan = await prisma.plan.delete({ where: { id: planId } });
+			await pagarmeApi.delete(`/plans/${deletedPlan.pagarmePlanId}`);
+
 			res.json({ message: 'Assinatura excluida com sucesso.' });
 		} catch (error: any) {
 			console.error('Erro ao excluir assinatura:', error.message);
