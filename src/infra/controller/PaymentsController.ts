@@ -146,17 +146,37 @@ export default class PaymentController {
 		try {
 			const { planId } = req.params;
 
-			const plans = await prisma.plan.findUnique({
+			const plan = await prisma.plan.findUnique({
 				where: {
 					id: planId
 				},
 				omit: {
-					trainerId: true,
 					pagarmePlanId: true,
 				},
 			});
 
-			res.json(plans);
+			if (!plan) {
+				res.status(404).json({ message: 'Plano nao encontrado.' });
+				return;
+			}
+
+			const trainerProfile = await prisma.profile.findUnique({
+				where: {
+					username: plan?.trainerUsername
+				},
+				select: {
+					id: true,
+					name: true,
+					avatar: true,
+					phone: true,
+					username: true,
+					specialty: true,
+					rate: true
+				}
+			});
+
+
+			res.json({ ...plan, trainer: trainerProfile });
 		} catch (error: any) {
 			console.error('Erro ao buscar planos:', error.response?.data || error.message);
 			res.status(500).json({ message: 'Erro ao buscar planos.' });
@@ -346,6 +366,52 @@ export default class PaymentController {
 			});
 
 			res.json(subscriptions);
+		} catch (error: any) {
+			console.error('Erro ao buscar assinaturas:', error.response?.data || error.message);
+			res.status(500).json({ message: 'Erro ao buscar assinaturas.' });
+		}
+	}
+	/**
+	 * Get de uma assinatura pelo ID dela
+	 */
+	static async getSubscription(req: Request, res: Response) {
+		try {
+			const { subscriptionId } = req.params;
+			const subscription = await prisma.subscription.findUnique({
+				where: { id: subscriptionId },
+				omit: {
+					pagarmeSubscriptionId: true
+				},
+				include: {
+					user: {
+						omit: {
+							password: true,
+							pagarmeCustomerId: true,
+							role: true,
+						}
+					},
+					trainer: {
+						omit: {
+							password: true,
+							pagarmeCustomerId: true,
+							role: true,
+							cpf: true
+						}
+					},
+					plan: {
+						omit: {
+							trainerId: true,
+							pagarmePlanId: true
+						}
+					}
+				}
+			});
+
+			if (!subscription) {
+				return res.status(404).json({ message: 'Assinatura não encontrada.' });
+			}
+
+			res.json(subscription);
 		} catch (error: any) {
 			console.error('Erro ao buscar assinaturas:', error.response?.data || error.message);
 			res.status(500).json({ message: 'Erro ao buscar assinaturas.' });
@@ -999,6 +1065,28 @@ export default class PaymentController {
 		catch (error: any) {
 			console.error('Erro ao editar plano:', error.message);
 			res.status(500).json({ message: 'Erro ao editar plano.' });
+		}
+	}
+	/**
+	 * Desativar plano
+	 */
+	static async disablePlan(req: Request, res: Response) {
+		try {
+			const { planId } = req.params;
+			const plan = await prisma.plan.findUnique({ where: { id: planId } });
+			if (!plan) {
+				res.status(404).json({ message: 'Plano não encontrado.' });
+				return;
+			}
+			await prisma.plan.update({
+				where: { id: planId },
+				data: { isActive: false },
+			});
+			res.json({ message: 'Plano desativado com sucesso.' });
+		}
+		catch (error: any) {
+			console.error('Erro ao desativar plano:', error.message);
+			res.status(500).json({ message: 'Erro ao desativar plano.' });
 		}
 	}
 }

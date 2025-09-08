@@ -14,12 +14,14 @@ router.post('/plan', upload.single('subscriptions-images'), PaymentController.cr
 router.get('/plans/:username', PaymentController.getTrainerPlans); // Lista planos criados do treinador ✅
 router.get('/plan/:planId', PaymentController.getTrainerPlan); // Lista planos criados do treinador ✅
 router.put('/plan/:planId', PaymentController.editPlans); // Editar plano ✅ (necessita de método rollback)
+router.patch('/plan/:planId', PaymentController.disablePlan); // Editar plano ✅ (necessita de método rollback)
 router.delete('/plan/:planId', PaymentController.deleteSubscriptionModel); // Deleta plano ✅ (necessita de método rollback)
 
 router.post('/subscription', PaymentController.payMonthlySubscription); // Assinatura mensalidade ✅
+router.get('/subscription/:subscriptionId', PaymentController.getSubscription); // Assinatura mensalidade ✅
 router.get('/subscriptions/:userId', PaymentController.listSubscriptions);
 router.get('/subscriptions/:userId/trainer', PaymentController.getTrainerStudents); // Lista inscrições criados do treinador ✅
-router.delete('/subscription/:userId/:subscriptionId', PaymentController.cancelSubscription); // Cancela assinatura de aluno ✅
+router.patch('/subscription/:userId/:subscriptionId', PaymentController.cancelSubscription); // Cancela assinatura de aluno ✅
 
 // ===== TRANSAÇÕES =====
 router.get('/transactions/:userId', PaymentController.getTransactions); // Lista transações ✅

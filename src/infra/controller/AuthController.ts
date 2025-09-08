@@ -59,7 +59,9 @@ export default class AuthController {
 			const { email, password } = req.body;
 
 			const user = await prisma.user.findUnique({
-				where: { email: email.toString().toLowerCase().trim() },
+				where: {
+					email: email.toString().toLowerCase().trim(),
+				},
 			});
 
 			if (!user) {
@@ -77,7 +79,7 @@ export default class AuthController {
 
 			if (!isValidPassword) {
 				res.status(401).json({ message: 'Invalid password' });
-				return; // Agora interrompe a execução corretamente
+				return;
 			}
 
 			const token = sign(
