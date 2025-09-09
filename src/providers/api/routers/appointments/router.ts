@@ -22,5 +22,6 @@ router.patch('/:id/mark-paid', AppointmentController.markAsPaid);
 // Rotas de horários do treinador
 router.post('/horarios', AppointmentController.addTrainerSchedule);
 router.get('/horarios/:trainerUsername', AppointmentController.getTrainerSchedule);
+router.get('/horarios/date/:trainerId/:date', AppointmentController.getAvailableTimes);
 
 export default router;
