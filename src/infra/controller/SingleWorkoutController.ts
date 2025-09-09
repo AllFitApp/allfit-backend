@@ -72,7 +72,7 @@ export default class PaymentController {
 					description,
 					price: priceInCents,
 					category: category?.trim(),
-					duration: duration ? parseInt(duration) : null,
+					duration: parseInt(duration),
 					imageUrl
 				},
 			});

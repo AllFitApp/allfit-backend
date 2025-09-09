@@ -1,4 +1,5 @@
 import { PrismaClient } from '@prisma/client';
+import dayjs from 'dayjs';
 import { Request, Response } from 'express';
 
 const prisma = new PrismaClient();
@@ -228,6 +229,7 @@ export default class AppointmentController {
 				location,
 				date,
 				notes,
+				duration,
 				subscriptionId,
 				singleWorkoutId
 			} = req.body;
@@ -241,6 +243,11 @@ export default class AppointmentController {
 			// Deve ter studentId 
 			if (!studentId) {
 				res.status(400).json({ message: 'Deve fornecer studentId ' });
+				return;
+			}
+
+			if (!duration) {
+				res.status(400).json({ message: 'Deve fornecer duração ' });
 				return;
 			}
 
@@ -265,6 +272,7 @@ export default class AppointmentController {
 				notes: notes || '',
 				status: 'pending', // Sempre inicia como pending (aguardando aceite do treinador)
 				paymentStatus: defaultPaymentStatus,
+				duration: parseInt(duration),
 				...(studentId && { studentId }),
 				...(subscriptionId && { subscriptionId }),
 				...(singleWorkoutId && { singleWorkoutId: parseInt(singleWorkoutId) }),
@@ -529,4 +537,153 @@ export default class AppointmentController {
 			res.status(500).json({ message: 'Erro ao marcar pagamento como pago', err });
 		}
 	}
+	/**
+ * Retorna os horários disponíveis para um treinador em uma data específica
+ */
+	static async getAvailableTimes(req: Request, res: Response): Promise<void> {
+		const { trainerId, date } = req.params;
+		const { duration } = req.query; // Duração em minutos
+
+		if (!duration) {
+			res.status(400).json({ message: 'Duração do agendamento é obrigatória' });
+			return;
+		}
+		// Validar formato da data
+		const targetDate = dayjs(date);
+		if (!targetDate.isValid()) {
+			throw new Error('Data inválida. Use o formato YYYY-MM-DD');
+		}
+
+		// Validar duração
+		const appointmentDuration = duration ? parseInt(duration as string) : 60; // Default 60 minutos
+		if (appointmentDuration <= 0 || appointmentDuration > 480) { // Máximo 8 horas
+			res.status(400).json({ message: 'Duração inválida. Deve ser entre 1 e 480 minutos' });
+			return;
+		}
+
+		// Buscar configurações de horário do treinador
+		const trainerHorarios = await prisma.trainerHorarios.findUnique({
+			where: { trainerId }
+		});
+
+		if (!trainerHorarios || !trainerHorarios.horarios) {
+			res.status(404).json({ message: 'Horários do treinador não encontrados' });
+			return;
+		}
+
+		// Obter dia da semana (0 = domingo)
+		const dayOfWeek = targetDate.day();
+
+		// Encontrar configuração para o dia da semana
+		const dayConfig = (trainerHorarios.horarios as any[])
+			.find(config => config.day === dayOfWeek);
+
+		if (!dayConfig || !dayConfig.intervals.length) {
+			res.status(404).json({ message: 'Configuração de horário para o dia da semana nao encontrada' });
+			return;
+		}
+
+		// Buscar agendamentos existentes para o dia
+		const startOfDay = targetDate.startOf('day').toDate();
+		const endOfDay = targetDate.endOf('day').toDate();
+
+		const existingAppointments = await prisma.appointment.findMany({
+			where: {
+				trainerId,
+				date: {
+					gte: startOfDay,
+					lte: endOfDay
+				},
+				status: {
+					in: ['pending', 'accepted']
+				}
+			},
+			select: {
+				date: true,
+				duration: true
+			}
+		});
+
+		// Gerar todos os slots de 30 minutos possíveis baseados nos intervalos configurados
+		const availableSlots: string[] = [];
+
+		dayConfig.intervals.forEach((interval: any) => {
+			const startHour = interval.start;
+			const endHour = interval.end;
+
+			// Gerar slots de 30 em 30 minutos
+			for (let hour = startHour; hour < endHour; hour++) {
+				// Adicionar slot no início da hora (ex: 8:00)
+				availableSlots.push(`${hour.toString().padStart(2, '0')}:00`);
+
+				// Adicionar slot na metade da hora (ex: 8:30) se não ultrapassar o fim do intervalo
+				if (hour + 0.5 < endHour) {
+					availableSlots.push(`${hour.toString().padStart(2, '0')}:30`);
+				}
+			}
+		});
+
+		// Filtrar slots que conflitam com agendamentos existentes OU que não permitem completar a aula
+		const availableTimes = availableSlots.filter(timeSlot => {
+			const slotDateTime = dayjs(`${date} ${timeSlot}`, 'YYYY-MM-DD HH:mm');
+			const appointmentEndTime = slotDateTime.add(appointmentDuration, 'minute');
+
+			// 1. Verificar se o agendamento pode ser completado dentro dos intervalos de trabalho
+			const canCompleteWithinWorkingHours = dayConfig.intervals.some((interval: any) => {
+				const intervalStart = dayjs(`${date} ${interval.start.toString().padStart(2, '0')}:00`, 'YYYY-MM-DD HH:mm');
+				const intervalEnd = dayjs(`${date} ${interval.end.toString().padStart(2, '0')}:00`, 'YYYY-MM-DD HH:mm');
+
+				// Verificar se o agendamento começa e termina dentro deste intervalo
+				return (slotDateTime.isAfter(intervalStart) || slotDateTime.isSame(intervalStart)) &&
+					(appointmentEndTime.isBefore(intervalEnd) || appointmentEndTime.isSame(intervalEnd));
+			});
+
+			if (!canCompleteWithinWorkingHours) {
+				return false;
+			}
+
+			// 2. Verificar se este slot conflita com algum agendamento existente
+			const hasConflict = existingAppointments.some(appointment => {
+				const appointmentStart = dayjs(appointment.date);
+				const existingAppointmentDuration = appointment.duration || 60;
+				const appointmentEnd = appointmentStart.add(existingAppointmentDuration, 'minute');
+
+				// Verificar se há sobreposição entre o novo agendamento e o existente
+				return (
+					slotDateTime.isBefore(appointmentEnd) &&
+					appointmentEndTime.isAfter(appointmentStart)
+				);
+			});
+
+			return !hasConflict;
+		});
+
+		// Remover horários que já passaram (se for hoje)
+		const now = dayjs();
+		const finalAvailableTimes = availableTimes.filter(timeSlot => {
+			const slotDateTime = dayjs(`${date} ${timeSlot}`, 'YYYY-MM-DD HH:mm');
+
+			// Se for hoje, só mostrar horários futuros (considerando também o tempo para completar a aula)
+			if (targetDate.isSame(now, 'day')) {
+				return slotDateTime.isAfter(now);
+			}
+
+			// Se for data futura, mostrar todos
+			return targetDate.isAfter(now, 'day');
+		});
+
+		res.status(200).json(finalAvailableTimes);
+	}
 }
+
+// Exemplo de uso:
+/*
+const availableTimes = await getAvailableTimes({
+	trainerId: 'trainer-uuid',
+	date: '2025-09-08',
+	timeZone: 'America/Sao_Paulo'
+}, prisma)
+
+console.log(availableTimes)
+// Output exemplo: ['08:00', '08:30', '09:00', '09:30', '14:00', '14:30', '15:00']
+*/
