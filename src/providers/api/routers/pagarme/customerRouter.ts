@@ -20,4 +20,7 @@ customerRouter.post('/:userId/cards', CustomerController.saveCard); // Adiciona 
 customerRouter.get('/:userId/cards', CustomerController.getSavedCards); // Lista cartões do usuário
 customerRouter.get('/:userId/cards/sync', CustomerController.syncSavedCards); // Lista cartões do usuário
 
+customerRouter.post('/address', CustomerController.createBillingAddress); // Adiciona um cartão para um usuário
+customerRouter.get('/:userId/address', CustomerController.getBillingAddress); // Lista cartões do usuário
+
 export default customerRouter;

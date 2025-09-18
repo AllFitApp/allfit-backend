@@ -80,18 +80,21 @@ model Profile {
 }
 
 model Address {
-  id             Int      @id @default(autoincrement())
-  userId         String   @unique @map("user_id")
-  street         String
-  complementary  String?
-  streetNumber   String   @map("street_number")
-  neighborhood   String
-  city           String
-  state          String   @db.VarChar(2)
-  zipCode        String   @map("zip_code")
-  referencePoint String?  @map("reference_point")
-  createdAt      DateTime @default(now()) @map("created_at")
-  updatedAt      DateTime @updatedAt @map("updated_at")
+  id               Int      @id @default(autoincrement())
+  userId           String   @unique @map("user_id")
+  street           String
+  complementary    String?
+  streetNumber     String   @map("street_number")
+  neighborhood     String
+  line_2           String?
+  city             String
+  state            String   @db.VarChar(2)
+  country          String?
+  zipCode          String   @map("zip_code")
+  referencePoint   String?  @map("reference_point")
+  createdAt        DateTime @default(now()) @map("created_at")
+  updatedAt        DateTime @updatedAt @map("updated_at")
+  pagarmeAddressId String?  @map("pagarme_address_id")
 
   user          User            @relation(fields: [userId], references: [id], onDelete: Cascade)
   recipientInfo RecipientInfo[]
@@ -324,7 +327,6 @@ model SavedCard {
   holderDocument String   @default("") @map("holder_document")
   expMonth       Int      @default(0) @map("exp_month")
   expYear        Int      @default(0) @map("exp_year")
-  lastFourDigits String   @default("") @map("last_four_digits")
   firstSixDigits String   @default("") @map("first_six_digits")
   status         String   @default("") @map("status")
   type           String

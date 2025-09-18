@@ -123,7 +123,6 @@ export default class PaymentController {
 			const plans = await prisma.plan.findMany({
 				where: {
 					trainerUsername: username,
-					isActive: true,
 				},
 				omit: {
 					trainerId: true,
