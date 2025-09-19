@@ -24,11 +24,18 @@ export default class PaymentController {
 			// Valida treinador
 			const user = await prisma.user.findUnique({
 				where: { id: userId },
-				select: { role: true, username: true },
+				include: {
+					wallet: { select: { pagarmeWalletId: true } },
+					trainerHorarios: { select: { id: true } }
+				}
 			});
 
 			if (!user || user.role !== 'TRAINER') {
 				res.status(400).json({ message: 'Usuário deve ser um treinador.' });
+				return;
+			}
+			if (!user.trainerHorarios?.id || user.wallet?.pagarmeWalletId) {
+				res.status(400).json({ message: 'Você deve configurar sua conta para continuar.' });
 				return;
 			}
 

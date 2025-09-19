@@ -30,15 +30,24 @@ export default class PaymentController {
 
 			const user = await prisma.user.findUnique({
 				where: { id: userId },
-				select: { role: true, username: true, wallet: { select: { pagarmeWalletId: true } } },
+				select: {
+					role: true,
+					username: true,
+					wallet: { select: { pagarmeWalletId: true } },
+					trainerHorarios: {
+						select: {
+							id: true,
+						}
+					}
+				},
 			});
 
 			if (!user || user.role.toUpperCase() !== 'TRAINER') {
 				res.status(400).json({ message: 'Usuário deve ser um treinador.' });
 				return;
 			}
-			if (!user.wallet?.pagarmeWalletId) {
-				res.status(405).json({ message: 'Você deve ter uma carteira para continuar.' });
+			if (!user.wallet?.pagarmeWalletId || !user.trainerHorarios?.id) {
+				res.status(405).json({ message: 'Você deve configurar sua conta para continuar.' });
 				return;
 			}
 			if (price <= 1000) {
