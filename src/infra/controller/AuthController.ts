@@ -45,12 +45,16 @@ export default class AuthController {
 
 			const user = await AuthController.userRepository.save(createdUser);
 			const profile = await AuthController.profileRepository.createProfileFromUser(user.id, {});
-			const customer = await CustomerController.createCustomer({ userId: user.id });
 
-			if (!customer.data.user) {
-				await prisma.user.delete({ where: { id: user.id } });
-				res.status(500).json({ message: 'Error creating customer' });
-				return;
+			if (role === 'USER') {
+				const customer = await CustomerController.createCustomer({ userId: user.id });
+
+				if (!customer.data.user) {
+					await prisma.user.delete({ where: { id: user.id } });
+					console.log('Error creating customer', customer.data);
+					res.status(500).json({ message: 'Error creating customer' });
+					return;
+				}
 			}
 			res.status(200).json({ user });
 		} catch (err) {
