@@ -1,7 +1,8 @@
 // infra/controller/PagarmeController.ts
 import pagarmeApi from '@/lib/axios';
 import { supabase } from '@/lib/supabase';
-import { PrismaClient } from '@prisma/client';
+import { PrismaClient, SavedCard, Subscription } from '@prisma/client';
+import { randomUUID } from 'crypto';
 import dayjs from 'dayjs';
 import { Request, Response } from 'express';
 
@@ -26,7 +27,7 @@ export default class PaymentController {
 	 */
 	static async createMonthlyModel(req: Request, res: Response) {
 		try {
-			const { userId, name, description, price, features } = req.body;
+			const { userId, name, description, price, features, isFree } = req.body;
 
 			const user = await prisma.user.findUnique({
 				where: { id: userId },
@@ -37,8 +38,8 @@ export default class PaymentController {
 					trainerHorarios: {
 						select: {
 							id: true,
-						}
-					}
+						},
+					},
 				},
 			});
 
@@ -46,35 +47,35 @@ export default class PaymentController {
 				res.status(400).json({ message: 'Usuário deve ser um treinador.' });
 				return;
 			}
-			if (!user.wallet?.pagarmeWalletId || !user.trainerHorarios?.id) {
+			if (!user.trainerHorarios?.id) {
 				res.status(405).json({ message: 'Você deve configurar sua conta para continuar.' });
 				return;
 			}
-			if (price <= 1000) {
-				res.status(400).json({ message: 'O valor do plano deve ser maior que R$ 10,00.' });
-				return;
-			}
 
-			const payload = {
-				interval: 'month',
-				interval_count: 1,
-				pricing_scheme: {
-					scheme_type: 'unit',
-					price: price,
-				},
-				quantity: 1,
-				name,
-				currency: 'BRL',
-				billing_type: 'prepaid',
-				payment_methods: ['credit_card'],
-				metadata: { recipientId: user.wallet.pagarmeWalletId },
-			};
-			const { data, status, statusText } = await pagarmeApi.post('/plans', payload);
+			var pagarmeResponse: any = null;
 
-			if (data?.status !== 'active') {
-				console.log('Erro ao criar plano:', statusText);
-				res.status(500).json({ message: 'Erro ao criar plano.' });
-				return;
+			if (!isFree && user.wallet?.pagarmeWalletId) {
+				const payload = {
+					interval: 'month',
+					interval_count: 1,
+					pricing_scheme: {
+						scheme_type: 'unit',
+						price: price,
+					},
+					quantity: 1,
+					name,
+					currency: 'BRL',
+					billing_type: 'prepaid',
+					payment_methods: ['credit_card'],
+					metadata: { recipientId: user.wallet.pagarmeWalletId },
+				};
+				const { data, status, statusText } = await pagarmeApi.post('/plans', payload);
+				pagarmeResponse = data;
+				if (data?.status !== 'active') {
+					console.log('Erro ao criar plano:', statusText);
+					res.status(500).json({ message: 'Erro ao criar plano.' });
+					return;
+				}
 			}
 
 			if (!user) {
@@ -96,13 +97,13 @@ export default class PaymentController {
 				data: {
 					trainerId: userId,
 					trainerUsername: user.username,
-					pagarmePlanId: data.id,
+					pagarmePlanId: pagarmeResponse?.id || '',
 					name,
 					description,
 					price: Number(price),
 					features: JSON.parse(features),
 					isActive: true,
-					imageUrl
+					imageUrl,
 				},
 			});
 
@@ -148,7 +149,7 @@ export default class PaymentController {
 		}
 	}
 	/**
-	 * 
+	 *
 	 */
 	static async getTrainerPlan(req: Request, res: Response) {
 		try {
@@ -156,7 +157,7 @@ export default class PaymentController {
 
 			const plan = await prisma.plan.findUnique({
 				where: {
-					id: planId
+					id: planId,
 				},
 				omit: {
 					pagarmePlanId: true,
@@ -170,7 +171,7 @@ export default class PaymentController {
 
 			const trainerProfile = await prisma.profile.findUnique({
 				where: {
-					username: plan?.trainerUsername
+					username: plan?.trainerUsername,
 				},
 				select: {
 					id: true,
@@ -179,10 +180,9 @@ export default class PaymentController {
 					phone: true,
 					username: true,
 					specialty: true,
-					rate: true
-				}
+					rate: true,
+				},
 			});
-
 
 			res.json({ ...plan, trainer: trainerProfile });
 		} catch (error: any) {
@@ -212,11 +212,6 @@ export default class PaymentController {
 				return;
 			}
 
-			if (!trainer.wallet) {
-				res.status(400).json({ message: 'Treinador deve ter uma carteira.' });
-				return;
-			}
-
 			// Busca o plano específico
 			const plan = await prisma.plan.findUnique({
 				where: { id: planId },
@@ -225,6 +220,15 @@ export default class PaymentController {
 
 			if (!plan || plan.trainerId !== trainerId) {
 				res.status(404).json({ message: 'Plano não encontrado.' });
+				return;
+			}
+
+			const amount = plan.price;
+			const platformFee = 0;
+			const trainerAmount = amount - platformFee;
+
+			if (!trainer.wallet && amount > 1) {
+				res.status(400).json({ message: 'Treinador deve ter uma carteira.' });
 				return;
 			}
 
@@ -253,53 +257,57 @@ export default class PaymentController {
 				return;
 			}
 
-			// Busca cartão salvo
-			const savedCard = await prisma.savedCard.findUnique({
-				where: { id: Number(cardId) },
-			});
+			var savedCard: SavedCard | null = null;
+			if (amount > 0 && trainer.wallet) {
+				// Busca cartão salvo
+				const card = await prisma.savedCard.findUnique({
+					where: { id: Number(cardId) },
+				});
 
-			if (!savedCard || savedCard.userId !== studentId) {
-				res.status(404).json({ message: 'Cartão não encontrado.' });
-				return;
+				savedCard = card;
+
+				if ((!savedCard || savedCard.userId !== studentId) && amount > 0) {
+					res.status(404).json({ message: 'Cartão não encontrado.' });
+					return;
+				}
 			}
 
-			const amount = plan.price;
-			const platformFee = Math.floor(amount * 0.05); // 10% para plataforma
-			const trainerAmount = amount - platformFee;
-
-			// Cria assinatura no Pagar.me V5
-			const subscriptionPayload = {
-				customer_id: student.pagarmeCustomerId,
-				payment_method: 'credit_card',
-				card_id: savedCard.pagarmeCardId,
-				items: [
-					{
-						description: `${plan.name} - ${trainer.name}`,
-						quantity: 1,
-						pricing_scheme: {
-							price: amount,
-							scheme_type: 'unit',
+			var subscription: Subscription | null = null;
+			if (amount > 0 && trainer.wallet) {
+				// Cria assinatura no Pagar.me V5
+				const subscriptionPayload = {
+					customer_id: student.pagarmeCustomerId,
+					payment_method: 'credit_card',
+					card_id: savedCard?.pagarmeCardId || '',
+					items: [
+						{
+							description: `${plan.name} - ${trainer.name}`,
+							quantity: 1,
+							pricing_scheme: {
+								price: amount,
+								scheme_type: 'unit',
+							},
 						},
-					},
-				],
-				interval: 'month',
-				interval_count: 1,
-				billing_type: 'prepaid',
-				split: [
-					{
-						recipient_id: trainer.wallet.pagarmeWalletId,
-						amount: trainerAmount,
-						type: 'flat',
-					},
-					{
-						recipient_id: process.env.PLATFORM_WALLET_ID,
-						amount: platformFee,
-						type: 'flat',
-					}
-				],
-			};
-
-			const { data: subscription } = await pagarmeApi.post('/subscriptions', subscriptionPayload);
+					],
+					interval: 'month',
+					interval_count: 1,
+					billing_type: 'prepaid',
+					split: [
+						{
+							recipient_id: trainer.wallet.pagarmeWalletId,
+							amount: trainerAmount,
+							type: 'flat',
+						},
+						{
+							recipient_id: process.env.PLATFORM_WALLET_ID,
+							amount: platformFee,
+							type: 'flat',
+						},
+					],
+				};
+				const { data } = await pagarmeApi.post('/subscriptions', subscriptionPayload);
+				subscription = data;
+			}
 
 			// Salva assinatura localmente
 			const localSubscription = await prisma.subscription.create({
@@ -307,24 +315,27 @@ export default class PaymentController {
 					userId: studentId,
 					trainerId,
 					planId,
-					pagarmeSubscriptionId: subscription.id,
+					pagarmeSubscriptionId: subscription?.id || randomUUID(),
 					status: 'ACTIVE',
 					planPrice: amount,
 					startDate: dayjs().toDate(),
 				},
 			});
 
-			if (subscription?.status !== 'active') {
+			if (subscription?.status !== 'ACTIVE' && amount > 0) {
 				res.status(400).json({ message: 'Assinatura falhou.' });
 			}
-			await prisma.wallet.update({
-				where: { userId: trainerId },
-				data: {
-					balance: {
-						increment: trainerAmount
-					}
-				}
-			});
+
+			if (trainer.wallet) {
+				await prisma.wallet.update({
+					where: { userId: trainerId },
+					data: {
+						balance: {
+							increment: trainerAmount,
+						},
+					},
+				});
+			}
 
 			res.status(201).json({
 				message: 'Assinatura criada com sucesso',
@@ -355,22 +366,22 @@ export default class PaymentController {
 							password: true,
 							pagarmeCustomerId: true,
 							role: true,
-						}
+						},
 					},
 					trainer: {
 						omit: {
 							password: true,
 							pagarmeCustomerId: true,
 							role: true,
-							cpf: true
-						}
+							cpf: true,
+						},
 					},
 					plan: {
 						omit: {
 							trainerId: true,
-						}
-					}
-				}
+						},
+					},
+				},
 			});
 
 			res.json(subscriptions);
@@ -388,7 +399,7 @@ export default class PaymentController {
 			const subscription = await prisma.subscription.findUnique({
 				where: { id: subscriptionId },
 				omit: {
-					pagarmeSubscriptionId: true
+					pagarmeSubscriptionId: true,
 				},
 				include: {
 					user: {
@@ -396,23 +407,23 @@ export default class PaymentController {
 							password: true,
 							pagarmeCustomerId: true,
 							role: true,
-						}
+						},
 					},
 					trainer: {
 						omit: {
 							password: true,
 							pagarmeCustomerId: true,
 							role: true,
-							cpf: true
-						}
+							cpf: true,
+						},
 					},
 					plan: {
 						omit: {
 							trainerId: true,
-							pagarmePlanId: true
-						}
-					}
-				}
+							pagarmePlanId: true,
+						},
+					},
+				},
 			});
 
 			if (!subscription) {
@@ -436,7 +447,7 @@ export default class PaymentController {
 			const singleWorkoutAppointments = await prisma.appointment.findMany({
 				where: {
 					trainerId,
-					singleWorkoutId: { not: null }
+					singleWorkoutId: { not: null },
 				},
 				include: {
 					student: {
@@ -447,26 +458,26 @@ export default class PaymentController {
 							email: true,
 							profile: {
 								select: {
-									avatar: true
-								}
-							}
-						}
+									avatar: true,
+								},
+							},
+						},
 					},
 					singleWorkout: {
 						select: {
 							name: true,
-							price: true
-						}
-					}
+							price: true,
+						},
+					},
 				},
-				orderBy: { createdAt: 'desc' }
+				orderBy: { createdAt: 'desc' },
 			});
 
 			// Buscar assinaturas ativas
 			const activeSubscriptions = await prisma.subscription.findMany({
 				where: {
 					trainerId,
-					status: 'ACTIVE'
+					status: 'ACTIVE',
 				},
 				include: {
 					user: {
@@ -477,33 +488,33 @@ export default class PaymentController {
 							email: true,
 							profile: {
 								select: {
-									avatar: true
-								}
-							}
-						}
+									avatar: true,
+								},
+							},
+						},
 					},
 					plan: {
 						select: {
 							name: true,
-							price: true
-						}
+							price: true,
+						},
 					},
 					appointments: {
 						where: {
 							date: { gte: new Date() }, // Próximas aulas
-							status: { in: ['pending', 'accepted'] }
+							status: { in: ['pending', 'accepted'] },
 						},
 						orderBy: { date: 'asc' },
-						take: 1
-					}
-				}
+						take: 1,
+					},
+				},
 			});
 
 			// Buscar assinaturas canceladas/expiradas (desistentes)
 			const canceledSubscriptions = await prisma.subscription.findMany({
 				where: {
 					trainerId,
-					status: { in: ['CANCELLED', 'EXPIRED'] }
+					status: { in: ['CANCELLED', 'EXPIRED'] },
 				},
 				include: {
 					user: {
@@ -514,24 +525,24 @@ export default class PaymentController {
 							email: true,
 							profile: {
 								select: {
-									avatar: true
-								}
-							}
-						}
+									avatar: true,
+								},
+							},
+						},
 					},
 					plan: {
 						select: {
 							name: true,
-							price: true
-						}
-					}
+							price: true,
+						},
+					},
 				},
-				orderBy: { updatedAt: 'desc' }
+				orderBy: { updatedAt: 'desc' },
 			});
 
 			// Formatação das aulas avulsas
 			const avulsasData = {
-				todos: singleWorkoutAppointments.map(appointment => ({
+				todos: singleWorkoutAppointments.map((appointment) => ({
 					id: appointment.id,
 					studentId: appointment.student.id,
 					name: appointment.student.name,
@@ -546,13 +557,13 @@ export default class PaymentController {
 					paymentStatus: appointment.paymentStatus,
 					paid: appointment.paymentStatus === 'paid',
 					workoutName: appointment.singleWorkout?.name,
-					price: appointment.singleWorkout?.price
+					price: appointment.singleWorkout?.price,
 				})),
 
 				// Filtrar por status específicos
 				pendentes: singleWorkoutAppointments
-					.filter(apt => apt.status === 'pending')
-					.map(appointment => ({
+					.filter((apt) => apt.status === 'pending')
+					.map((appointment) => ({
 						id: appointment.id,
 						studentId: appointment.student.id,
 						name: appointment.student.name,
@@ -561,12 +572,12 @@ export default class PaymentController {
 						photo: appointment.student.profile?.avatar || '',
 						paymentDate: appointment.paidAt,
 						classesCount: 1,
-						status: 'Agendamento Pendente'
+						status: 'Agendamento Pendente',
 					})),
 
 				finalizadas: singleWorkoutAppointments
-					.filter(apt => apt.status === 'completed')
-					.map(appointment => ({
+					.filter((apt) => apt.status === 'completed')
+					.map((appointment) => ({
 						id: appointment.id,
 						studentId: appointment.student.id,
 						name: appointment.student.name,
@@ -575,12 +586,12 @@ export default class PaymentController {
 						photo: appointment.student.profile?.avatar || '',
 						completedDate: appointment.completedAt,
 						classesCount: 1,
-						status: 'Concluído'
+						status: 'Concluído',
 					})),
 
 				marcadas: singleWorkoutAppointments
-					.filter(apt => apt.status === 'accepted' && new Date(apt.date) > new Date())
-					.map(appointment => ({
+					.filter((apt) => apt.status === 'accepted' && new Date(apt.date) > new Date())
+					.map((appointment) => ({
 						id: appointment.id,
 						studentId: appointment.student.id,
 						name: appointment.student.name,
@@ -589,15 +600,15 @@ export default class PaymentController {
 						photo: appointment.student.profile?.avatar || '',
 						scheduledDate: appointment.date,
 						classesCount: 1,
-						status: 'Agendado'
-					}))
+						status: 'Agendado',
+					})),
 			};
 
 			// Formatação das assinaturas
 			const assinaturasData = {
 				aulasAgendadas: activeSubscriptions
-					.filter(sub => sub.appointments.length > 0)
-					.map(subscription => ({
+					.filter((sub) => sub.appointments.length > 0)
+					.map((subscription) => ({
 						id: subscription.id,
 						studentId: subscription.user.id,
 						name: subscription.user.name,
@@ -609,12 +620,12 @@ export default class PaymentController {
 						paymentStatus: subscription.status === 'ACTIVE' ? 'Em dia' : 'Atrasado',
 						paymentMethod: 'Não informado', // Seria necessário buscar da última transação
 						nextClass: subscription.appointments[0]?.date,
-						subscriptionDate: subscription.startDate
+						subscriptionDate: subscription.startDate,
 					})),
 
 				semAgendamento: activeSubscriptions
-					.filter(sub => sub.appointments.length === 0)
-					.map(subscription => ({
+					.filter((sub) => sub.appointments.length === 0)
+					.map((subscription) => ({
 						id: subscription.id,
 						studentId: subscription.user.id,
 						name: subscription.user.name,
@@ -625,10 +636,10 @@ export default class PaymentController {
 						planPrice: subscription.planPrice,
 						paymentStatus: subscription.status === 'ACTIVE' ? 'Em dia' : 'Atrasado',
 						paymentMethod: 'Não informado', // Seria necessário buscar da última transação
-						subscriptionDate: subscription.startDate
+						subscriptionDate: subscription.startDate,
 					})),
 
-				desistentes: canceledSubscriptions.map(subscription => ({
+				desistentes: canceledSubscriptions.map((subscription) => ({
 					id: subscription.id,
 					studentId: subscription.user.id,
 					name: subscription.user.name,
@@ -638,8 +649,8 @@ export default class PaymentController {
 					plan: subscription.plan.name,
 					planPrice: subscription.planPrice,
 					cancelDate: subscription.updatedAt, // Data da última atualização (cancelamento)
-					subscriptionDate: subscription.startDate
-				}))
+					subscriptionDate: subscription.startDate,
+				})),
 			};
 
 			// Contar totais para cada categoria
@@ -648,24 +659,23 @@ export default class PaymentController {
 				totalActiveSubscriptions: activeSubscriptions.length,
 				totalCanceledSubscriptions: canceledSubscriptions.length,
 				totalStudents: new Set([
-					...singleWorkoutAppointments.map(apt => apt.student.id),
-					...activeSubscriptions.map(sub => sub.user.id)
-				]).size
+					...singleWorkoutAppointments.map((apt) => apt.student.id),
+					...activeSubscriptions.map((sub) => sub.user.id),
+				]).size,
 			};
 
 			const response = {
 				summary,
 				avulsas: avulsasData,
-				assinaturas: assinaturasData
+				assinaturas: assinaturasData,
 			};
 
 			res.json(response);
-
 		} catch (error: any) {
 			console.error('Erro ao buscar alunos do trainer:', error);
 			res.status(500).json({
 				message: 'Erro ao buscar alunos do trainer.',
-				error: error.message
+				error: error.message,
 			});
 		}
 	}
@@ -713,15 +723,17 @@ export default class PaymentController {
 				});
 			}
 
-			// Cancelar assinatura na Pagar.me
-			const { data, status, statusText } = await pagarmeApi.delete(
-				`/subscriptions/${subscription.pagarmeSubscriptionId}`
-			);
+			if (subscription.planPrice > 0) {
+				// Cancelar assinatura na Pagar.me
+				const { data, status, statusText } = await pagarmeApi.delete(
+					`/subscriptions/${subscription.pagarmeSubscriptionId}`
+				);
 
-			if (!data) {
-				const errorData = await data.json();
-				res.status(500).json(`Erro na Pagar.me: ${errorData.message || 'Erro desconhecido'}`);
-				return;
+				if (!data) {
+					const errorData = await data.json();
+					res.status(500).json(`Erro na Pagar.me: ${errorData.message || 'Erro desconhecido'}`);
+					return;
+				}
 			}
 
 			// Atualizar status no banco local
@@ -792,7 +804,9 @@ export default class PaymentController {
 				description,
 			} = req.body;
 			const tax = 0.05; // taxa da plataforma: 10%
-			console.log(`studentId: ${studentId}, trainerId: ${trainerId}, workoutId: ${workoutId}, cardId: ${cardId}, paymentMethod: ${paymentMethod}`);
+			console.log(
+				`studentId: ${studentId}, trainerId: ${trainerId}, workoutId: ${workoutId}, cardId: ${cardId}, paymentMethod: ${paymentMethod}`
+			);
 			// 1) Busca detalhes da aula avulsa
 			const singleWorkout = await prisma.singleWorkout.findUnique({
 				where: { id: parseInt(workoutId) },
@@ -801,7 +815,7 @@ export default class PaymentController {
 					id: true,
 					name: true,
 					trainerId: true,
-					isActive: true
+					isActive: true,
 				},
 			});
 
@@ -1069,8 +1083,7 @@ export default class PaymentController {
 				},
 				priceFormatted: (updatedPlan.price / 100).toFixed(2),
 			});
-		}
-		catch (error: any) {
+		} catch (error: any) {
 			console.error('Erro ao editar plano:', error.message);
 			res.status(500).json({ message: 'Erro ao editar plano.' });
 		}
@@ -1091,14 +1104,12 @@ export default class PaymentController {
 				data: { isActive: false },
 			});
 			res.json({ message: 'Plano desativado com sucesso.' });
-		}
-		catch (error: any) {
+		} catch (error: any) {
 			console.error('Erro ao desativar plano:', error.message);
 			res.status(500).json({ message: 'Erro ao desativar plano.' });
 		}
 	}
 }
-
 
 // Função auxiliar para buscar método de pagamento da última transação
 async function getLastPaymentMethod(userId: string, trainerId: string) {
@@ -1107,9 +1118,9 @@ async function getLastPaymentMethod(userId: string, trainerId: string) {
 			where: {
 				userId,
 				trainerId,
-				type: 'PAYMENT'
+				type: 'PAYMENT',
 			},
-			orderBy: { createdAt: 'desc' }
+			orderBy: { createdAt: 'desc' },
 		});
 
 		return lastTransaction?.paymentMethod || 'Não informado';

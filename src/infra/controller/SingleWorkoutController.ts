@@ -26,16 +26,16 @@ export default class PaymentController {
 				where: { id: userId },
 				include: {
 					wallet: { select: { pagarmeWalletId: true } },
-					trainerHorarios: { select: { id: true } }
-				}
+					trainerHorarios: { select: { id: true } },
+				},
 			});
 
 			if (!user || user.role !== 'TRAINER') {
 				res.status(400).json({ message: 'Usuário deve ser um treinador.' });
 				return;
 			}
-			if (!user.trainerHorarios?.id || user.wallet?.pagarmeWalletId) {
-				res.status(400).json({ message: 'Você deve configurar sua conta para continuar.' });
+			if (!user.trainerHorarios?.id) {
+				res.status(400).json({ message: 'Você deve configurar seus horários para continuar.' });
 				return;
 			}
 
@@ -60,7 +60,6 @@ export default class PaymentController {
 				return;
 			}
 
-
 			const imageUrlResult = await addExerciseImage(req.file);
 			let imageUrl: string | null = null;
 
@@ -80,7 +79,7 @@ export default class PaymentController {
 					price: priceInCents,
 					category: category?.trim(),
 					duration: parseInt(duration),
-					imageUrl
+					imageUrl,
 				},
 			});
 

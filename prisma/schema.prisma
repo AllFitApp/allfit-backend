@@ -133,6 +133,31 @@ model RecipientInfo {
   @@map("recipient_infos")
 }
 
+model PartnerGym {
+  id                String   @id @default(uuid())
+  name              String   @db.VarChar(200)
+  street            String
+  streetNumber      String   @map("street_number")
+  neighborhood      String
+  city              String
+  state             String   @db.VarChar(2)
+  zipCode           String   @map("zip_code")
+  complementary     String?
+  availableServices Json     @map("available_services") // Array de serviços disponíveis
+  contactPhone      String?  @map("contact_phone")
+  contactEmail      String?  @map("contact_email")
+  contactWebsite    String?  @map("contact_website")
+  photoUrl          String  @map("photo_url")
+  isActive          Boolean  @default(true) @map("is_active")
+  createdAt         DateTime @default(now()) @map("created_at")
+  updatedAt         DateTime @updatedAt @map("updated_at")
+
+  @@index([city, state])
+  @@index([isActive])
+  @@index([name])
+  @@map("partner_gyms")
+}
+
 model Appointment {
   id        String   @id @default(uuid())
   trainerId String   @map("trainer_id")
