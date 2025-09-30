@@ -97,7 +97,7 @@ export default class PaymentController {
 				data: {
 					trainerId: userId,
 					trainerUsername: user.username,
-					pagarmePlanId: pagarmeResponse?.id || '',
+					pagarmePlanId: pagarmeResponse?.id || Math.random().toString(36).substring(2, 9),
 					name,
 					description,
 					price: Number(price),
