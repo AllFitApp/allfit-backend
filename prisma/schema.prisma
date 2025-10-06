@@ -9,72 +9,63 @@ datasource db {
 }
 
 model User {
-  id        String   @id @default(uuid())
-  name      String   @db.VarChar(100)
-  username  String   @unique @db.VarChar(100)
-  password  String
-  cpf       String
-  number    String   @db.VarChar(100)
-  email     String   @unique @db.VarChar(100)
-  role      Role     @default(USER)
-  createdAt DateTime @default(now()) @map("created_at")
-  updatedAt DateTime @updatedAt @map("updated_at")
-
-  pagarmeCustomerId String? @unique @map("pagarme_customer_id")
-
-  profile        Profile?
-  likes          PostLike[]
-  wallet         Wallet?
-  savedCards     SavedCard[]
-  plans          Plan[]
-  singleWorkouts SingleWorkout[] // Agora um treinador pode ter múltiplas aulas avulsas
-  recipientInfo  RecipientInfo?
-  addresses      Address?
-
-  trainerHorarios     TrainerHorarios?
-  trainerAppointments Appointment[]    @relation("TrainerAppointments")
-
-  studentAppointments Appointment[] @relation("StudentAppointments")
-
-  transactions        Transaction[] @relation("UserTransactions")
-  trainerTransactions Transaction[] @relation("TrainerTransactions")
-
-  subscriptions        Subscription[] @relation("UserSubscriptions")
-  trainerSubscriptions Subscription[] @relation("TrainerSubscriptions")
-
-  orders        Order[] @relation("CustomerOrders")
-  trainerOrders Order[] @relation("TrainerOrders")
-
-  createdWorkouts    WorkoutSession[] @relation("TrainerWorkouts")
-  createdExercises   Exercise[]       @relation("TrainerExercises")
-  weeklyPlans        WeeklyPlan[]     @relation("StudentWeeklyPlans")
-  trainerWeeklyPlans WeeklyPlan[]     @relation("TrainerWeeklyPlans")
+  id                   String           @id @default(uuid())
+  name                 String           @db.VarChar(100)
+  username             String           @unique @db.VarChar(100)
+  password             String
+  number               String           @db.VarChar(100)
+  email                String           @unique @db.VarChar(100)
+  role                 Role             @default(USER)
+  createdAt            DateTime         @default(now()) @map("created_at")
+  updatedAt            DateTime         @updatedAt @map("updated_at")
+  pagarmeCustomerId    String?          @unique @map("pagarme_customer_id")
+  cpf                  String
+  addresses            Address?
+  studentAppointments  Appointment[]    @relation("StudentAppointments")
+  trainerAppointments  Appointment[]    @relation("TrainerAppointments")
+  createdExercises     Exercise[]       @relation("TrainerExercises")
+  orders               Order[]          @relation("CustomerOrders")
+  trainerOrders        Order[]          @relation("TrainerOrders")
+  plans                Plan[]
+  likes                PostLike[]
+  recipientInfo        RecipientInfo?
+  savedCards           SavedCard[]
+  singleWorkouts       SingleWorkout[]
+  trainerSubscriptions Subscription[]   @relation("TrainerSubscriptions")
+  subscriptions        Subscription[]   @relation("UserSubscriptions")
+  trainerHorarios      TrainerHorarios?
+  trainerTransactions  Transaction[]    @relation("TrainerTransactions")
+  transactions         Transaction[]    @relation("UserTransactions")
+  profile              Profile?
+  wallet               Wallet?
+  weeklyPlans          WeeklyPlan[]     @relation("StudentWeeklyPlans")
+  trainerWeeklyPlans   WeeklyPlan[]     @relation("TrainerWeeklyPlans")
+  createdWorkouts      WorkoutSession[] @relation("TrainerWorkouts")
 
   @@map("users")
 }
 
 model Profile {
   id                String   @id @default(uuid())
-  username          String   @unique
-  name              String
   address           String
   phone             String
   alunos            Int
-  posts             Post[]
+  name              String
   description       String
   niche             String
   followers         Int
   rate              Float
   avatar            String
-  marketImage       String?
-  formation         String?
-  specialty         String?
-  onlineService     String?
-  presencialService String?
   createdAt         DateTime @default(now())
   updatedAt         DateTime @updatedAt
-
-  user User @relation(fields: [username], references: [username], onDelete: Cascade)
+  username          String   @unique
+  formation         String?
+  onlineService     String?
+  presencialService String?
+  specialty         String?
+  marketImage       String?
+  posts             Post[]
+  user              User     @relation(fields: [username], references: [username], onDelete: Cascade)
 
   @@map("user_infos")
 }
@@ -103,32 +94,27 @@ model Address {
 }
 
 model RecipientInfo {
-  id     Int    @id @default(autoincrement())
-  userId String @unique @map("user_id")
-
-  addressId Int @map("address_id")
-
-  siteUrl                String? @map("site_url")
-  motherName             String? @map("mother_name")
+  id                     Int      @id @default(autoincrement())
+  userId                 String   @unique @map("user_id")
+  addressId              Int      @map("address_id")
+  siteUrl                String?  @map("site_url")
+  motherName             String?  @map("mother_name")
   birthdate              String
-  monthlyIncome          Int?    @map("monthly_income")
-  professionalOccupation String? @map("professional_occupation")
-
-  bankHolderName     String @map("bank_holder_name")
-  bankHolderType     String @default("individual") @map("bank_holder_type")
-  bankHolderDocument String @map("bank_holder_document")
-  bank               String
-  branchNumber       String @map("branch_number")
-  branchCheckDigit   String @map("branch_check_digit")
-  accountNumber      String @map("account_number")
-  accountCheckDigit  String @map("account_check_digit")
-  accountType        String @default("checking") @map("account_type")
-
-  createdAt DateTime @default(now()) @map("created_at")
-  updatedAt DateTime @updatedAt @map("updated_at")
-
-  user    User    @relation(fields: [userId], references: [id], onDelete: Cascade)
-  address Address @relation(fields: [addressId], references: [id])
+  monthlyIncome          Int?     @map("monthly_income")
+  professionalOccupation String?  @map("professional_occupation")
+  bankHolderName         String   @map("bank_holder_name")
+  bankHolderType         String   @default("individual") @map("bank_holder_type")
+  bankHolderDocument     String   @map("bank_holder_document")
+  bank                   String
+  branchNumber           String   @map("branch_number")
+  branchCheckDigit       String   @map("branch_check_digit")
+  accountNumber          String   @map("account_number")
+  accountCheckDigit      String   @map("account_check_digit")
+  accountType            String   @default("checking") @map("account_type")
+  createdAt              DateTime @default(now()) @map("created_at")
+  updatedAt              DateTime @updatedAt @map("updated_at")
+  address                Address  @relation(fields: [addressId], references: [id])
+  user                   User     @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@map("recipient_infos")
 }
@@ -159,36 +145,31 @@ model PartnerGym {
 }
 
 model Appointment {
-  id        String   @id @default(uuid())
-  trainerId String   @map("trainer_id")
-  studentId String   @map("student_id")
-  location  Json // Objeto location com type, name, address
-  date      DateTime @db.Timestamptz(3)
-  notes     String
-  duration  Int
-
-  status      String    @default("pending") // pending, accepted, rejected, completed, cancelled, no_show
-  acceptedAt  DateTime? @map("accepted_at")
-  rejectedAt  DateTime? @map("rejected_at")
-  completedAt DateTime? @map("completed_at")
-
-  paymentStatus String    @default("pending") // pending, paid, refunded
-  paidAt        DateTime? @map("paid_at")
-
-  createdAt DateTime @default(now()) @map("created_at")
-  updatedAt DateTime @updatedAt @map("updated_at")
-
-  subscriptionId   String? @map("subscription_id")
-  singleWorkoutId  Int?    @map("single_workout_id")
+  id               String          @id @default(uuid())
+  date             DateTime        @db.Timestamptz(3)
+  notes            String
   planId           String?
-  workoutSessionId String? @map("workout_session_id")
-
-  trainer        User            @relation("TrainerAppointments", fields: [trainerId], references: [id], onDelete: Cascade)
-  student        User            @relation("StudentAppointments", fields: [studentId], references: [id], onDelete: Cascade)
-  subscription   Subscription?   @relation(fields: [subscriptionId], references: [id])
-  singleWorkout  SingleWorkout?  @relation(fields: [singleWorkoutId], references: [id])
-  plan           Plan?           @relation(fields: [planId], references: [id])
-  workoutSession WorkoutSession?
+  completedAt      DateTime?       @map("completed_at")
+  createdAt        DateTime        @default(now()) @map("created_at")
+  paidAt           DateTime?       @map("paid_at")
+  paymentStatus    String          @default("pending")
+  singleWorkoutId  Int?            @map("single_workout_id")
+  status           String          @default("pending")
+  studentId        String          @map("student_id")
+  subscriptionId   String?         @map("subscription_id")
+  trainerId        String          @map("trainer_id")
+  updatedAt        DateTime        @updatedAt @map("updated_at")
+  location         Json
+  acceptedAt       DateTime?       @map("accepted_at")
+  rejectedAt       DateTime?       @map("rejected_at")
+  workoutSessionId String?         @map("workout_session_id")
+  duration         Int?
+  plan             Plan?           @relation(fields: [planId], references: [id])
+  singleWorkout    SingleWorkout?  @relation(fields: [singleWorkoutId], references: [id])
+  student          User            @relation("StudentAppointments", fields: [studentId], references: [id], onDelete: Cascade)
+  subscription     Subscription?   @relation(fields: [subscriptionId], references: [id])
+  trainer          User            @relation("TrainerAppointments", fields: [trainerId], references: [id], onDelete: Cascade)
+  workoutSession   WorkoutSession?
 
   @@index([trainerId])
   @@index([date])
@@ -202,16 +183,15 @@ model Appointment {
 }
 
 model Post {
-  id        String    @id @default(uuid())
-  profileId String    @map("profile_id")
-  caption   String?   @db.Text
-  mediaUrl  String    @map("media_url")
-  mediaType MediaType @map("media_type")
-  createdAt DateTime  @default(now()) @map("created_at")
-  updatedAt DateTime  @updatedAt @map("updated_at")
-
-  profile Profile    @relation(fields: [profileId], references: [id], onDelete: Cascade)
-  likes   PostLike[]
+  id        String     @id @default(uuid())
+  profileId String     @map("profile_id")
+  caption   String?
+  mediaUrl  String     @map("media_url")
+  mediaType MediaType  @map("media_type")
+  createdAt DateTime   @default(now()) @map("created_at")
+  updatedAt DateTime   @updatedAt @map("updated_at")
+  likes     PostLike[]
+  profile   Profile    @relation(fields: [profileId], references: [id], onDelete: Cascade)
 
   @@index([profileId, createdAt])
   @@map("posts")
@@ -222,9 +202,8 @@ model PostLike {
   userId    String   @map("user_id")
   postId    String   @map("post_id")
   createdAt DateTime @default(now()) @map("created_at")
-
-  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
-  post Post @relation(fields: [postId], references: [id], onDelete: Cascade)
+  post      Post     @relation(fields: [postId], references: [id], onDelete: Cascade)
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@unique([userId, postId])
   @@index([postId])
@@ -236,36 +215,31 @@ model TrainerHorarios {
   id                    Int      @id @default(autoincrement())
   trainerId             String   @unique
   horarios              Json
-  savedLocations        Json?
-  defaultLocationConfig Json?
   createdAt             DateTime @default(now())
   updatedAt             DateTime @updatedAt
-
-  trainer User @relation(fields: [trainerId], references: [id], onDelete: Cascade)
+  defaultLocationConfig Json?
+  savedLocations        Json?
+  trainer               User     @relation(fields: [trainerId], references: [id], onDelete: Cascade)
 
   @@map("trainer_horarios")
 }
 
-// === SISTEMA DE TREINOS ===
-
 model Exercise {
-  id          String   @id @default(uuid())
-  trainerId   String   @map("trainer_id")
-  name        String
-  description String?
-  series      Int
-  rest        Int
-  weight      Float?
-  type        String?
-  reps        Int?
-  timing      Int?
-  createdAt   DateTime @default(now()) @map("created_at")
-  updatedAt   DateTime @updatedAt @map("updated_at")
-  isCopy      Boolean? @map("is_copy")
-  imageUrl    String?  @map("image_url")
-
-  trainer User @relation("TrainerExercises", fields: [trainerId], references: [id], onDelete: Cascade)
-
+  id              String           @id @default(uuid())
+  trainerId       String           @map("trainer_id")
+  name            String
+  description     String?
+  series          Int
+  rest            Int
+  weight          Float?
+  type            String?
+  reps            Int?
+  timing          Int?
+  createdAt       DateTime         @default(now()) @map("created_at")
+  updatedAt       DateTime         @updatedAt @map("updated_at")
+  isCopy          Boolean?         @map("is_copy")
+  imageUrl        String?          @map("image_url")
+  trainer         User             @relation("TrainerExercises", fields: [trainerId], references: [id], onDelete: Cascade)
   workoutSessions WorkoutSession[] @relation("WorkoutExercises")
 
   @@index([trainerId])
@@ -274,26 +248,23 @@ model Exercise {
 }
 
 model WorkoutSession {
-  id          String   @id @default(uuid())
-  trainerId   String   @map("trainer_id")
-  name        String
-  description String?
-  type        String?
-  dayOfWeek   Int?     @map("day_of_week")
-  defaultRest Int?     @map("rest_between_exercises")
-  order       Int?
-  createdAt   DateTime @default(now()) @map("created_at")
-  updatedAt   DateTime @updatedAt @map("updated_at")
-  isCopy      Boolean? @map("is_copy")
-
-  // Relações opcionais - uma sessão pode estar vinculada a um appointment OU a um plano semanal
-  appointmentId String? @unique @map("appointment_id")
-  weeklyPlanId  String? @map("weekly_plan_id")
-
-  trainer     User         @relation("TrainerWorkouts", fields: [trainerId], references: [id], onDelete: Cascade)
-  exercises   Exercise[]   @relation("WorkoutExercises")
-  appointment Appointment? @relation(fields: [appointmentId], references: [id])
-  weeklyPlan  WeeklyPlan?  @relation(fields: [weeklyPlanId], references: [id])
+  id            String       @id @default(uuid())
+  trainerId     String       @map("trainer_id")
+  name          String
+  description   String?
+  type          String?
+  defaultRest   Int?         @map("rest_between_exercises")
+  createdAt     DateTime     @default(now()) @map("created_at")
+  updatedAt     DateTime     @updatedAt @map("updated_at")
+  appointmentId String?      @unique @map("appointment_id")
+  dayOfWeek     Int?         @map("day_of_week")
+  order         Int?
+  weeklyPlanId  String?      @map("weekly_plan_id")
+  isCopy        Boolean?     @map("is_copy")
+  appointment   Appointment? @relation(fields: [appointmentId], references: [id])
+  trainer       User         @relation("TrainerWorkouts", fields: [trainerId], references: [id], onDelete: Cascade)
+  weeklyPlan    WeeklyPlan?  @relation(fields: [weeklyPlanId], references: [id])
+  exercises     Exercise[]   @relation("WorkoutExercises")
 
   @@index([trainerId])
   @@index([type])
@@ -303,30 +274,26 @@ model WorkoutSession {
 }
 
 model WeeklyPlan {
-  id          String    @id @default(uuid())
-  trainerId   String    @map("trainer_id")
-  studentId   String?   @map("student_id")
+  id          String           @id @default(uuid())
+  trainerId   String           @map("trainer_id")
+  studentId   String?          @map("student_id")
   name        String
   description String?
-  startDate   DateTime  @map("start_date")
-  endDate     DateTime? @map("end_date")
-  isActive    Boolean   @default(true) @map("is_active")
-  createdAt   DateTime  @default(now()) @map("created_at")
-  updatedAt   DateTime  @updatedAt @map("updated_at")
-  isCopy      Boolean?  @map("is_copy")
-
-  trainer User  @relation("TrainerWeeklyPlans", fields: [trainerId], references: [id], onDelete: Cascade)
-  student User? @relation("StudentWeeklyPlans", fields: [studentId], references: [id], onDelete: Cascade)
-
-  workouts WorkoutSession[]
+  startDate   DateTime         @map("start_date")
+  endDate     DateTime?        @map("end_date")
+  isActive    Boolean          @default(true) @map("is_active")
+  createdAt   DateTime         @default(now()) @map("created_at")
+  updatedAt   DateTime         @updatedAt @map("updated_at")
+  isCopy      Boolean?         @map("is_copy")
+  student     User?            @relation("StudentWeeklyPlans", fields: [studentId], references: [id], onDelete: Cascade)
+  trainer     User             @relation("TrainerWeeklyPlans", fields: [trainerId], references: [id], onDelete: Cascade)
+  workouts    WorkoutSession[]
 
   @@index([trainerId, studentId])
   @@index([studentId, isActive])
   @@index([startDate, endDate])
   @@map("weekly_plans")
 }
-
-// === SISTEMA DE PAGAMENTOS ===
 
 model Wallet {
   id              Int      @id @default(autoincrement())
@@ -336,8 +303,7 @@ model Wallet {
   lastSynced      DateTime @default(now()) @map("last_synced")
   createdAt       DateTime @default(now()) @map("created_at")
   updatedAt       DateTime @updatedAt @map("updated_at")
-
-  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  user            User     @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@map("wallet")
 }
@@ -358,31 +324,29 @@ model SavedCard {
   isDefault      Boolean  @default(false) @map("is_default")
   createdAt      DateTime @default(now()) @map("created_at")
   updatedAt      DateTime @updatedAt @map("updated_at")
-
-  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  user           User     @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@index([userId])
   @@map("saved_cards")
 }
 
 model Plan {
-  id              String   @id @default(uuid())
-  trainerUsername String   @map("trainer_username")
-  trainerId       String   @map("trainer_id")
-  pagarmePlanId   String   @unique @map("pagarme_plan_id")
+  id              String         @id @default(uuid())
   name            String
   description     String?
-  category        String?
   price           Int
-  features        Json? // Array do que o plano oferece
-  isActive        Boolean  @default(true) @map("is_active")
-  createdAt       DateTime @default(now()) @map("created_at")
-  updatedAt       DateTime @updatedAt @map("updated_at")
-  imageUrl        String?  @map("image_url")
-
-  trainer       User           @relation(fields: [trainerId], references: [id], onDelete: Cascade)
-  subscriptions Subscription[]
-  appointments  Appointment[]
+  features        Json?
+  isActive        Boolean        @default(true) @map("is_active")
+  createdAt       DateTime       @default(now()) @map("created_at")
+  updatedAt       DateTime       @updatedAt @map("updated_at")
+  category        String?
+  trainerUsername String         @map("trainer_username")
+  trainerId       String         @map("trainer_id")
+  pagarmePlanId   String         @unique @map("pagarme_plan_id")
+  imageUrl        String?        @map("image_url")
+  appointments    Appointment[]
+  trainer         User           @relation(fields: [trainerId], references: [id], onDelete: Cascade)
+  subscriptions   Subscription[]
 
   @@index([trainerUsername, isActive, trainerId])
   @@map("plans")
@@ -401,10 +365,9 @@ model Subscription {
   createdAt             DateTime           @default(now()) @map("created_at")
   updatedAt             DateTime           @updatedAt @map("updated_at")
   appointments          Appointment[]
-
-  user    User @relation("UserSubscriptions", fields: [userId], references: [id], onDelete: Cascade)
-  trainer User @relation("TrainerSubscriptions", fields: [trainerId], references: [id], onDelete: Cascade)
-  plan    Plan @relation(fields: [planId], references: [id], onDelete: Cascade)
+  plan                  Plan               @relation(fields: [planId], references: [id], onDelete: Cascade)
+  trainer               User               @relation("TrainerSubscriptions", fields: [trainerId], references: [id], onDelete: Cascade)
+  user                  User               @relation("UserSubscriptions", fields: [userId], references: [id], onDelete: Cascade)
 
   @@index([userId])
   @@index([trainerId])
@@ -413,21 +376,20 @@ model Subscription {
 }
 
 model SingleWorkout {
-  id              Int      @id @default(autoincrement())
-  trainerUsername String   @map("trainer_username")
-  trainerId       String   @map("trainer_id")
+  id              Int           @id @default(autoincrement())
+  trainerUsername String        @map("trainer_username")
+  trainerId       String        @map("trainer_id")
   name            String
   description     String?
   category        String?
   price           Int
-  duration        Int
-  isActive        Boolean  @default(true) @map("is_active")
-  createdAt       DateTime @default(now()) @map("created_at")
-  updatedAt       DateTime @updatedAt @map("updated_at")
-  imageUrl        String?  @map("image_url")
-
-  trainer      User          @relation(fields: [trainerId], references: [id], onDelete: Cascade)
-  appointments Appointment[]
+  duration        Int?
+  isActive        Boolean       @default(true) @map("is_active")
+  createdAt       DateTime      @default(now()) @map("created_at")
+  updatedAt       DateTime      @updatedAt @map("updated_at")
+  imageUrl        String?       @map("image_url")
+  appointments    Appointment[]
+  trainer         User          @relation(fields: [trainerId], references: [id], onDelete: Cascade)
 
   @@index([trainerId, isActive])
   @@index([trainerUsername, isActive])
@@ -446,9 +408,8 @@ model Order {
   pagarmeOrderId String?  @unique @map("pagarme_order_id")
   createdAt      DateTime @default(now()) @map("created_at")
   updatedAt      DateTime @updatedAt @map("updated_at")
-
-  customer User @relation("CustomerOrders", fields: [customerId], references: [id], onDelete: Cascade)
-  trainer  User @relation("TrainerOrders", fields: [trainerId], references: [id], onDelete: Cascade)
+  customer       User     @relation("CustomerOrders", fields: [customerId], references: [id], onDelete: Cascade)
+  trainer        User     @relation("TrainerOrders", fields: [trainerId], references: [id], onDelete: Cascade)
 
   @@index([customerId])
   @@index([trainerId])
@@ -457,23 +418,21 @@ model Order {
   @@map("orders")
 }
 
-// Transaction deve usar SetNull para preservar histórico
 model Transaction {
   id            Int             @id @default(autoincrement())
-  userId        String?         @map("user_id") // quem fez o pagamento
-  trainerId     String?         @map("trainer_id") // quem recebeu
-  orderId       String?         @map("order_id") // ID da ordem no Pagar.me
-  transferId    String?         @map("transfer_id") // ID da transferência no Pagar.me
+  userId        String?         @map("user_id")
+  trainerId     String?         @map("trainer_id")
+  orderId       String?         @map("order_id")
+  transferId    String?         @map("transfer_id")
   amount        Int
   type          TransactionType
-  status        String?
   paymentMethod String?         @map("payment_method")
   description   String?
   createdAt     DateTime        @default(now()) @map("created_at")
   updatedAt     DateTime        @updatedAt @map("updated_at")
-
-  user    User? @relation("UserTransactions", fields: [userId], references: [id], onDelete: SetNull)
-  trainer User? @relation("TrainerTransactions", fields: [trainerId], references: [id], onDelete: SetNull)
+  status        String?
+  trainer       User?           @relation("TrainerTransactions", fields: [trainerId], references: [id])
+  user          User?           @relation("UserTransactions", fields: [userId], references: [id])
 
   @@index([userId])
   @@index([trainerId])
@@ -482,7 +441,26 @@ model Transaction {
   @@map("transactions")
 }
 
-// === ENUMS ===
+
+
+model Feedback {
+  id         String   @id @default(uuid())
+  name       String
+  email      String
+  experience String
+  liked      String
+  disliked   String
+  bug        String
+  navigation String
+  recommend  String
+  suggestion String
+  features   Json
+  usability  Int
+  createdAt  DateTime @default(now()) @map("created_at")
+  updatedAt  DateTime @updatedAt @map("updated_at")
+
+  @@map("feedbacks")
+}
 
 enum MediaType {
   IMAGE
@@ -496,10 +474,10 @@ enum Role {
 }
 
 enum TransactionType {
-  PAYMENT // pagamento de aula ou assinatura
-  WITHDRAWAL // saque
-  REFUND // estorno
-  FEE // taxa da plataforma 
+  PAYMENT
+  WITHDRAWAL
+  REFUND
+  FEE
 }
 
 enum SubscriptionStatus {

@@ -14,6 +14,7 @@ import 'dotenv/config'; // ou
 import { exerciseRouter } from './routers/exercises/router';
 import { partnerGymRouter } from './routers/partnerGym/router';
 import { workoutRouter } from './routers/workout/router';
+import feedbackRouter from './routers/feedback/router';
 require('dotenv').config();
 
 const router = express.Router();
@@ -30,6 +31,7 @@ router.use('/wallet', walletRouter);
 router.use('/customer', customerRouter);
 router.use('/workouts', workoutRouter);
 router.use('/exercises', exerciseRouter);
+router.use('/feedback', feedbackRouter);
 router.use('/partner-gyms', partnerGymRouter);
 // (async () => {
 // 	const url = await ngrok.connect({
