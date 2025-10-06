@@ -324,12 +324,6 @@ model SavedCard {
   isDefault      Boolean  @default(false) @map("is_default")
   createdAt      DateTime @default(now()) @map("created_at")
   updatedAt      DateTime @updatedAt @map("updated_at")
-  type           String
-  expMonth       Int      @default(0) @map("exp_month")
-  expYear        Int      @default(0) @map("exp_year")
-  firstSixDigits String   @default("") @map("first_six_digits")
-  holderDocument String   @default("") @map("holder_document")
-  status         String   @default("") @map("status")
   user           User     @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@index([userId])
@@ -447,29 +441,7 @@ model Transaction {
   @@map("transactions")
 }
 
-model partner_gyms {
-  id                 String   @id
-  name               String   @db.VarChar(200)
-  street             String
-  street_number      String
-  neighborhood       String
-  city               String
-  state              String   @db.VarChar(2)
-  zip_code           String
-  complementary      String?
-  available_services Json
-  contact_phone      String?
-  contact_email      String?
-  contact_website    String?
-  photo_url          String
-  is_active          Boolean  @default(true)
-  created_at         DateTime @default(now())
-  updated_at         DateTime
 
-  @@index([city, state])
-  @@index([is_active])
-  @@index([name])
-}
 
 model Feedback {
   id         String   @id @default(uuid())
