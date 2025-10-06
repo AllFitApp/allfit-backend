@@ -183,7 +183,7 @@ export class WorkoutController {
 			const { studentId } = req.params;
 
 			const plans = await prisma.weeklyPlan.findMany({
-				where: { studentId, isCopy: true },
+				where: { studentId, isCopy: true, isActive: true },
 				include: {
 					workouts: { include: { exercises: true } }
 				}
@@ -213,6 +213,16 @@ export class WorkoutController {
 				return res.status(404).json({ error: 'Plano semanal nao encontrado' });
 			}
 
+			await prisma.weeklyPlan.updateMany({
+				where: {
+					studentId,
+					isActive: true,
+				},
+				data: {
+					isActive: false
+				}
+			});
+
 			const plan = await prisma.weeklyPlan.create({
 				data: {
 					trainerId,
@@ -222,6 +232,7 @@ export class WorkoutController {
 					startDate: weeklyPlan?.startDate,
 					endDate: weeklyPlan?.endDate,
 					isCopy: true,
+					isActive: true,
 					workouts: {
 						create: weeklyPlan?.workouts.map((w) => ({
 							trainerId,

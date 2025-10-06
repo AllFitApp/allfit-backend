@@ -15,7 +15,10 @@ export default class ProfileController {
 			const { username } = req.params;
 
 			// Verifica se o perfil existe
-			const profile = await prisma.profile.findUnique({ where: { username: username }, include: { user: { select: { id: true, role: true } } } });
+			const profile = await prisma.profile.findUnique({
+				where: { username: username },
+				include: { user: { select: { id: true, role: true } } },
+			});
 
 			if (!profile) {
 				// Se não houver perfil, buscar informações básicas do usuário
@@ -202,14 +205,14 @@ export default class ProfileController {
 			// Valida os parâmetros de paginação
 			if (limitNumber <= 0 || pageNumber <= 0) {
 				res.status(400).json({
-					message: 'Os parâmetros limit e page devem ser números positivos'
+					message: 'Os parâmetros limit e page devem ser números positivos',
 				});
 				return;
 			}
 
 			// Constrói o filtro base
 			const whereClause: any = {
-				user: { role: 'TRAINER' }
+				user: { role: 'TRAINER' },
 			};
 
 			if (search && typeof search === 'string' && search.trim() !== '') {
@@ -223,27 +226,27 @@ export default class ProfileController {
 							{
 								name: {
 									contains: searchTerm,
-									mode: 'insensitive'
-								}
+									mode: 'insensitive',
+								},
 							},
 							// Busca no username do usuário
 							{
 								user: {
 									username: {
 										contains: searchTerm,
-										mode: 'insensitive'
+										mode: 'insensitive',
 									},
-									role: 'TRAINER'
-								}
+									role: 'TRAINER',
+								},
 							},
 							{
 								specialty: {
 									contains: searchTerm,
-									mode: 'insensitive'
-								}
-							}
-						]
-					}
+									mode: 'insensitive',
+								},
+							},
+						],
+					},
 				];
 			}
 
@@ -255,20 +258,18 @@ export default class ProfileController {
 						user: {
 							select: {
 								username: true,
-								email: true
-							}
-						}
+								email: true,
+							},
+						},
 					},
-					orderBy: [
-						{ name: 'asc' }
-					],
+					orderBy: [{ name: 'asc' }],
 					skip: offset,
-					take: limitNumber
+					take: limitNumber,
 				}),
 				// Conta o total de registros para informações de paginação
 				prisma.profile.count({
-					where: whereClause
-				})
+					where: whereClause,
+				}),
 			]);
 
 			// Calcula informações de paginação
@@ -284,8 +285,8 @@ export default class ProfileController {
 					totalItems: totalCount,
 					itemsPerPage: limitNumber,
 					hasNextPage,
-					hasPreviousPage
-				}
+					hasPreviousPage,
+				},
 			});
 		} catch (err) {
 			console.error('Error fetching trainers:', err);

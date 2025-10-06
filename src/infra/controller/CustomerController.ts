@@ -228,25 +228,42 @@ export default class CustomerController {
 	 */
 	static async saveCard(req: Request, res: Response) {
 		try {
-			const { userId, cardData } = req.body;
+			// Conterá caso não for informado um billingAddressId: street, streetNumber, neighborhood, line_2, city, state, country, zipCode
+			const { userId, cardData, billingAddressId, } = req.body;
+			const { street, streetNumber, neighborhood, line_2, city, state, country, zipCode } = req.body;
+
+			if (!userId || !cardData) {
+				res.status(400).json({ message: 'Todos os campos são obrigatórios.' });
+				return;
+			}
 
 			const user = await prisma.user.findUnique({
 				where: { id: userId },
-				select: { pagarmeCustomerId: true },
+				include: {
+					addresses: true
+				}
 			});
+
+			var addressPm;
+			if (billingAddressId) {
+				const res = await prisma.address.findUnique({ where: { id: billingAddressId }, select: { pagarmeAddressId: true } });
+				addressPm = { id: res?.pagarmeAddressId };
+			}
+			else {
+				addressPm = await createAddress({ city, country, line_2, neighborhood, state, street, streetNumber, userId, zipCode, pagarmeCustomerId: user?.pagarmeCustomerId || '' });
+			}
+
+			if (!addressPm?.id) {
+				res.status(400).json({ message: 'Erro em endereçar cartão.' });
+				return;
+			}
 
 			if (!user?.pagarmeCustomerId) {
 				res.status(400).json({ message: 'Usuário deve ter um customer ID.' });
 				return;
 			}
 
-			// Se for definido como padrão, remove o padrão dos outros cartões
-			if (cardData.isDefault) {
-				await prisma.savedCard.updateMany({
-					where: { userId },
-					data: { isDefault: false },
-				});
-			}
+
 
 			const cardPayload = {
 				number: cardData.number,
@@ -255,6 +272,7 @@ export default class CustomerController {
 				exp_month: cardData.expMonth,
 				exp_year: cardData.expYear,
 				cvv: cardData.cvv,
+				billing_address_id: addressPm.id,
 				options: {
 					verify_card: true,
 				},
@@ -262,19 +280,31 @@ export default class CustomerController {
 
 			const { data: card } = await pagarmeApi.post(`/customers/${user.pagarmeCustomerId}/cards`, cardPayload);
 
+			console.log(card);
 			// Salva cartão localmente
 			const savedCard = await prisma.savedCard.create({
 				data: {
 					userId,
 					pagarmeCardId: card.id,
+					expMonth: card.exp_month,
+					expYear: card.exp_year,
 					lastFour: card.last_four_digits,
+					firstSixDigits: card.first_six_digits,
+					status: card.status,
+					holderDocument: card.holder_document,
 					brand: card.brand,
 					holderName: card.holder_name,
 					type: card.type,
 					isDefault: cardData.isDefault,
 				},
 			});
-
+			// Se for definido como padrão, remove o padrão dos outros cartões
+			if (cardData.isDefault) {
+				await prisma.savedCard.updateMany({
+					where: { userId },
+					data: { isDefault: false },
+				});
+			}
 			res.status(201).json({
 				message: 'Cartão salvo com sucesso',
 				card: {
@@ -308,7 +338,6 @@ export default class CustomerController {
 					createdAt: true,
 					expMonth: true,
 					expYear: true,
-					lastFourDigits: true,
 					status: true,
 				},
 				orderBy: { createdAt: 'desc' },
@@ -366,7 +395,6 @@ export default class CustomerController {
 							holderDocument: card.holder_document ?? '',
 							expMonth: card.exp_month,
 							expYear: card.exp_year,
-							lastFourDigits: card.last_four_digits,
 							firstSixDigits: card.first_six_digits,
 							status: card.status,
 							type: card.type,
@@ -384,7 +412,6 @@ export default class CustomerController {
 							holderDocument: card.holder_document ?? '',
 							expMonth: card.exp_month,
 							expYear: card.exp_year,
-							lastFourDigits: card.last_four_digits,
 							firstSixDigits: card.first_six_digits,
 							status: card.status,
 							type: card.type,
@@ -407,4 +434,113 @@ export default class CustomerController {
 			res.status(500).json({ message: 'Erro ao sincronizar cartões.' });
 		}
 	}
+	/**
+	 * Cria um endereço na Pagarme
+	 */
+	static async createBillingAddress(req: Request, res: Response) {
+		try {
+			const { userId, street, streetNumber, neighborhood, line_2, city, state, country, zipCode } = req.body;
+
+			if (!userId || !street || !streetNumber || !neighborhood || !city || !state || !country || !zipCode) {
+				res.status(400).json({ message: 'Todos os campos obrigatórios devem ser preenchidos.' });
+				return;
+			}
+
+			const user = await prisma.user.findUnique({
+				where: { id: userId },
+				select: { pagarmeCustomerId: true, }
+			});
+
+			if (!user?.pagarmeCustomerId) {
+				res.status(400).json({ message: 'Usuário nao possui customerId na Pagarme.' });
+				return;
+			}
+
+			const addressPm = await createAddress({ userId, pagarmeCustomerId: user?.pagarmeCustomerId, street, streetNumber, neighborhood, line_2, city, state, country, zipCode });
+
+			res.json(addressPm);
+		} catch (error: any) {
+			console.error(error.response?.data || error.message);
+			res.status(500).json({ message: 'Erro ao criar endereço.' });
+		}
+	}
+	/**
+	 * Requisita o endereço
+	 */
+	static async getBillingAddress(req: Request, res: Response) {
+		try {
+			const { userId } = req.params;
+
+			if (!userId) {
+				res.status(404).json({ message: 'Usuário nao encontrado.' });
+				return;
+			}
+
+			const address = await prisma.address.findUnique({
+				where: { userId },
+				omit: { pagarmeAddressId: true, }
+			});
+
+			if (!address) {
+				res.status(404).json({ message: 'Endereço nao encontrado.' });
+				return;
+			}
+
+			res.json(address);
+		} catch (error: any) {
+			console.error(error.response?.data || error.message);
+			res.status(500).json({ message: 'Erro ao buscar endereço.' });
+		}
+	}
+}
+
+async function createAddress({ userId, pagarmeCustomerId, street, streetNumber, neighborhood, line_2, city, state, country, zipCode }: { userId: string, pagarmeCustomerId: string, street: string, streetNumber: string, neighborhood: string, line_2: string, city: string, state: string, country: string, zipCode: string; }) {
+	if (!userId || !pagarmeCustomerId || !street || !streetNumber || !neighborhood || !city || !state || !country || !zipCode) {
+		return { message: 'Todos os campos obrigatórios devem ser preenchidos.' };
+	}
+
+	const line_1 = `${streetNumber}, ${street}, ${neighborhood}`.slice(0, 256);
+
+	if (!userId) {
+		return { message: 'Usuário nao encontrado.' };
+	}
+
+	const payloadPagarme = {
+		line_1,
+		line_2,
+		neighborhood,
+		city,
+		state,
+		country,
+		zip_code: zipCode
+	};
+
+	const address = await prisma.address.findUnique({
+		where: { userId },
+		omit: { pagarmeAddressId: true, }
+	});
+	if (address) {
+		return ({ message: 'Usuário já tem um endereço cadastrado.' });
+	}
+
+	const { data: addressPm } = await pagarmeApi.post(`/customers/${pagarmeCustomerId}/addresses`, payloadPagarme);
+	if (!addressPm) {
+		return { message: 'Erro ao criar endereço Pm.' };
+	}
+	const localAddress = await prisma.address.create({
+		data: {
+			userId,
+			pagarmeAddressId: addressPm.id,
+			street,
+			streetNumber,
+			neighborhood,
+			line_2,
+			city,
+			state,
+			country,
+			zipCode
+		}
+	});
+	console.log(addressPm);
+	return addressPm;
 }

@@ -11,10 +11,10 @@ workoutRouter.put('/session/:id', WorkoutController.updateSession); // Atualizar
 workoutRouter.delete('/session/:id', WorkoutController.deleteSession); // Excluir sessão
 
 // workoutRouter.get('/weekly-plan/', WorkoutController.getWorkoutSessionsByWeeklyPlan);
-workoutRouter.post('/weekly-plan', WorkoutController.createWeeklyPlan);// Criar plano semanal
+workoutRouter.post('/weekly-plan', WorkoutController.createWeeklyPlan); // Criar plano semanal
 workoutRouter.get('/weekly-plan/:id', WorkoutController.getWorkoutSessionsByWeeklyPlan);
 workoutRouter.delete('/weekly-plan/:id', WorkoutController.deleteWeeklyPlan); // Buscar planos semanais de um aluno
-workoutRouter.get('/trainer/:trainerId', WorkoutController.getWeeklyPlansByTrainer);// Buscar planos semanais de um treinador
+workoutRouter.get('/trainer/:trainerId', WorkoutController.getWeeklyPlansByTrainer); // Buscar planos semanais de um treinador
 workoutRouter.get('/student/:studentId', WorkoutController.getWeeklyPlansByStudent); // Buscar planos semanais de um aluno
 
 // Atribuir plano a um aluno (copia plano existente)
@@ -23,4 +23,3 @@ workoutRouter.post('/assign-student', WorkoutController.assignWeeklyPlanToStuden
 workoutRouter.post('/assign-appointment', WorkoutController.assignSessionToAppointment);
 
 export { workoutRouter };
-

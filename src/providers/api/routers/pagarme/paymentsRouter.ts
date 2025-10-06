@@ -20,7 +20,7 @@ router.delete('/plan/:planId', PaymentController.deleteSubscriptionModel); // De
 router.post('/subscription', PaymentController.payMonthlySubscription); // Assinatura mensalidade ✅
 router.get('/subscription/:subscriptionId', PaymentController.getSubscription); // Assinatura mensalidade ✅
 router.get('/subscriptions/:userId', PaymentController.listSubscriptions);
-router.get('/subscriptions/:userId/trainer', PaymentController.getTrainerStudents); // Lista inscrições criados do treinador ✅
+router.get('/subscriptions/:trainerId/trainer', PaymentController.getTrainerStudents); // Lista assinaturas do treinador
 router.patch('/subscription/:userId/:subscriptionId', PaymentController.cancelSubscription); // Cancela assinatura de aluno ✅
 
 // ===== TRANSAÇÕES =====
