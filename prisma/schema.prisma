@@ -504,7 +504,7 @@ enum TransactionType {
 
 enum SubscriptionStatus {
   ACTIVE
-  CANCELLED
+  CANCELED
   EXPIRED
   SUSPENDED
 }

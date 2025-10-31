@@ -572,7 +572,7 @@ export default class PaymentController {
 			const canceledSubscriptions = await prisma.subscription.findMany({
 				where: {
 					trainerId,
-					status: { in: ['CANCELLED', 'EXPIRED'] },
+					status: { in: ['CANCELED', 'EXPIRED'] },
 				},
 				include: {
 					user: {
@@ -775,7 +775,7 @@ export default class PaymentController {
 			}
 
 			// Verificar se a assinatura já está cancelada
-			if (subscription.status === 'CANCELLED') {
+			if (subscription.status === 'CANCELED') {
 				return res.status(400).json({
 					error: 'Assinatura já está cancelada',
 				});
@@ -798,7 +798,7 @@ export default class PaymentController {
 			const updatedSubscription = await prisma.subscription.update({
 				where: { id: subscriptionId },
 				data: {
-					status: 'CANCELLED',
+					status: 'CANCELED',
 					endDate: new Date(),
 					updatedAt: new Date(),
 				},
@@ -1152,16 +1152,73 @@ export default class PaymentController {
 	static async disablePlan(req: Request, res: Response) {
 		try {
 			const { planId } = req.params;
-			const plan = await prisma.plan.findUnique({ where: { id: planId } });
+
+			const plan = await prisma.plan.findUnique({
+				where: { id: planId },
+				select: {
+					id: true,
+					name: true,
+					pagarmePlanId: true,
+				},
+			});
+
 			if (!plan) {
 				res.status(404).json({ message: 'Plano não encontrado.' });
 				return;
 			}
+
+			// 1. desativa o plano internamente
 			await prisma.plan.update({
 				where: { id: planId },
 				data: { isActive: false },
 			});
-			res.json({ message: 'Plano desativado com sucesso.' });
+
+			// 2. pega assinaturas ativas
+			const subscriptions = await prisma.subscription.findMany({
+				where: {
+					planId,
+					status: 'ACTIVE',
+				},
+				select: {
+					id: true,
+					pagarmeSubscriptionId: true,
+				},
+			});
+
+			await pagarmeApi.put(`/plans/${plan.pagarmePlanId}`, {
+				name: plan.name,
+				status: 'inactive',
+			});
+
+			// 3. cancela a renovação
+			for (const sub of subscriptions) {
+				try {
+					await pagarmeApi.delete(`/subscriptions/${sub.pagarmeSubscriptionId}`, {
+						data: {
+							cancel_pending_invoices: false,
+						},
+					});
+
+					await prisma.subscription.update({
+						where: { id: sub.id },
+						data: { status: 'CANCELED' },
+					});
+				} catch (err: any) {
+					console.error(`Falha ao agendar cancelamento da subscription ${sub.id}:`, err.message);
+				}
+			}
+			try {
+				await prisma.subscription.updateMany({
+					where: { id: { in: subscriptions.map((sub) => sub.id) } },
+					data: { status: 'CANCELED' },
+				});
+			} catch (error) {
+				console.error('Erro ao cancelar assinaturas:', error);
+			}
+
+			res.json({
+				message: 'Plano desativado. Renovação futura das assinaturas foi cancelada.',
+			});
 		} catch (error: any) {
 			console.error('Erro ao desativar plano:', error.message);
 			res.status(500).json({ message: 'Erro ao desativar plano.' });
