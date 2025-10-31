@@ -1,8 +1,8 @@
-import { PrismaClient } from '@prisma/client';
+import { PrismaClient, User } from '@prisma/client';
 import { compare, hash } from 'bcrypt';
 import { Request, Response } from 'express';
 import { sign } from 'jsonwebtoken';
-import User from '../../domain/entity/User';
+
 import { ProfileRepository } from '../repository/ProfileRepository';
 import UserRepository from '../repository/UserRepository';
 import CustomerController from './CustomerController';
@@ -33,15 +33,14 @@ export default class AuthController {
 
 			const hashedPassword = await hash(password, 8);
 
-			const createdUser = new User(
-				name.toString().trim(),
+			const createdUser: User =
+				(name.toString().trim(),
 				username.toString().toLowerCase().trim(),
 				hashedPassword,
 				number.toString().trim(),
 				email.toString().toLowerCase().trim(),
 				role,
-				cpf.toString().trim().match(/\d/g)?.join('') // remove formatação
-			);
+				cpf.toString().trim().match(/\d/g)?.join('')); // remove formatação
 
 			const user = await AuthController.userRepository.save(createdUser);
 			const profile = await AuthController.profileRepository.createProfileFromUser(user.id, {});
