@@ -10,6 +10,7 @@ import postsRouter from './routers/posts/router';
 import profileRouter from './routers/profile/router';
 import singleWorkout from './routers/singleWorkouts/router';
 
+import planRouter from '@/api/plansRouter';
 import 'dotenv/config'; // ou
 import { exerciseRouter } from './routers/exercises/router';
 import { partnerGymRouter } from './routers/partnerGym/router';
@@ -33,6 +34,7 @@ router.use('/workouts', workoutRouter);
 router.use('/exercises', exerciseRouter);
 router.use('/feedback', feedbackRouter);
 router.use('/partner-gyms', partnerGymRouter);
+router.use('/plans', planRouter);
 // (async () => {
 // 	const url = await ngrok.connect({
 // 		addr: 3002,

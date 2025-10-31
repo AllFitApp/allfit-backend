@@ -384,7 +384,38 @@ export default class PaymentController {
 				},
 			});
 
-			res.json(subscriptions);
+			// Buscar próxima data de pagamento no Pagar.me para cada assinatura
+			const subscriptionsWithBilling = await Promise.all(
+				subscriptions.map(async (subscription) => {
+					let nextBillingAt = null;
+
+					if (subscription.pagarmeSubscriptionId) {
+						try {
+							const pagarmeResponse = await pagarmeApi.get(
+								`/subscriptions/${subscription.pagarmeSubscriptionId}`
+							);
+
+							nextBillingAt = pagarmeResponse.data.next_billing_at;
+						} catch (pagarmeError: any) {
+							console.error(
+								`Erro ao buscar dados do Pagar.me para assinatura ${subscription.id}:`,
+								pagarmeError.response?.data || pagarmeError.message
+							);
+							// Continua a execução mesmo se falhar a busca no Pagar.me
+						}
+					}
+
+					// Remove pagarmeSubscriptionId da resposta
+					const { pagarmeSubscriptionId, ...subscriptionData } = subscription;
+
+					return {
+						nextBillingAt,
+						...subscriptionData,
+					};
+				})
+			);
+
+			res.json(subscriptionsWithBilling);
 		} catch (error: any) {
 			console.error('Erro ao buscar assinaturas:', error.response?.data || error.message);
 			res.status(500).json({ message: 'Erro ao buscar assinaturas.' });
@@ -398,9 +429,6 @@ export default class PaymentController {
 			const { subscriptionId } = req.params;
 			const subscription = await prisma.subscription.findUnique({
 				where: { id: subscriptionId },
-				omit: {
-					pagarmeSubscriptionId: true,
-				},
 				include: {
 					user: {
 						omit: {
@@ -410,6 +438,14 @@ export default class PaymentController {
 						},
 					},
 					trainer: {
+						include: {
+							profile: {
+								select: {
+									rate: true,
+									specialty: true,
+								},
+							},
+						},
 						omit: {
 							password: true,
 							pagarmeCustomerId: true,
@@ -427,10 +463,32 @@ export default class PaymentController {
 			});
 
 			if (!subscription) {
-				return res.status(404).json({ message: 'Assinatura não encontrada.' });
+				return res.status(404).json({ message: 'Assinatura não encontrada.' });
 			}
 
-			res.json(subscription);
+			// Buscar próxima data de pagamento no Pagar.me
+			let nextBillingAt = null;
+			if (subscription.pagarmeSubscriptionId) {
+				try {
+					const pagarmeResponse = await pagarmeApi.get(
+						`/subscriptions/${subscription.pagarmeSubscriptionId}`
+					);
+
+					nextBillingAt = pagarmeResponse.data.next_billing_at;
+				} catch (pagarmeError: any) {
+					console.error(
+						'Erro ao buscar dados do Pagar.me:',
+						pagarmeError.response?.data || pagarmeError.message
+					);
+					// Continua a execução mesmo se falhar a busca no Pagar.me
+				}
+			}
+			const { pagarmeSubscriptionId, ...subscriptionData } = subscription;
+
+			res.json({
+				nextBillingAt,
+				...subscriptionData,
+			});
 		} catch (error: any) {
 			console.error('Erro ao buscar assinaturas:', error.response?.data || error.message);
 			res.status(500).json({ message: 'Erro ao buscar assinaturas.' });
